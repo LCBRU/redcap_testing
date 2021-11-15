@@ -1,6 +1,6 @@
 import logging
 from time import sleep
-from redcap_tester import get_redcap_helper
+from selenium_helper import get_selenium
 from non_destructive_tests.project_tester import get_project_tester
 from dotenv import load_dotenv
 from datetime import datetime
@@ -8,19 +8,21 @@ from datetime import datetime
 
 load_dotenv()
 
+def login(helper):
+    pass
+
 logging.basicConfig(level=logging.INFO)
 logging.basicConfig(filename='errors.log', level=logging.ERROR)
 
-
 started = datetime.now()
 
-h = get_redcap_helper()
-
-h.login()
+h = get_selenium()
 
 testers = [
     get_project_tester(h),
 ]
+
+login(h)
 
 for t in testers:
     t.run()

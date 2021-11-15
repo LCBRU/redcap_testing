@@ -24,7 +24,7 @@ CREATE TABLE `redcap_auth` (
 `legacy_hash` int(1) NOT NULL DEFAULT '0' COMMENT 'Using older legacy hash for password storage?',
 `temp_pwd` int(1) NOT NULL DEFAULT '0' COMMENT 'Flag to force user to re-enter password',
 `password_question` int(10) DEFAULT NULL COMMENT 'PK of question',
-`password_answer` varchar(100) COLLATE utf8_unicode_ci DEFAULT NULL COMMENT 'MD5 hash of answer to password recovery question',
+`password_answer` text COLLATE utf8_unicode_ci COMMENT 'Hashed answer to password recovery question',
 `password_question_reminder` datetime DEFAULT NULL COMMENT 'When to prompt user to set up security question',
 `password_reset_key` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
 PRIMARY KEY (`username`),
@@ -299,6 +299,35 @@ KEY `date_deleted` (`delete_date`,`date_deleted_server`),
 KEY `project_id` (`project_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
+CREATE TABLE `redcap_ehr_access_tokens` (
+`patient` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
+`mrn` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL COMMENT 'If different from patient id',
+`token_owner` int(11) DEFAULT NULL COMMENT 'REDCap User ID',
+`expiration` datetime DEFAULT NULL,
+`access_token` text COLLATE utf8_unicode_ci,
+`refresh_token` text COLLATE utf8_unicode_ci,
+UNIQUE KEY `token_owner_mrn` (`token_owner`,`mrn`),
+UNIQUE KEY `token_owner_patient` (`token_owner`,`patient`) USING BTREE,
+KEY `access_token` (`access_token`(255)) USING BTREE,
+KEY `expiration` (`expiration`),
+KEY `mrn` (`mrn`) USING BTREE,
+KEY `patient` (`patient`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
+CREATE TABLE `redcap_ehr_user_map` (
+`ehr_username` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
+`redcap_userid` int(11) DEFAULT NULL,
+UNIQUE KEY `ehr_username` (`ehr_username`),
+UNIQUE KEY `redcap_userid` (`redcap_userid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
+CREATE TABLE `redcap_ehr_user_projects` (
+`project_id` int(11) DEFAULT NULL,
+`redcap_userid` int(11) DEFAULT NULL,
+UNIQUE KEY `project_id_userid` (`project_id`,`redcap_userid`),
+KEY `redcap_userid` (`redcap_userid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
 CREATE TABLE `redcap_esignatures` (
 `esign_id` int(11) NOT NULL AUTO_INCREMENT,
 `project_id` int(10) DEFAULT NULL,
@@ -408,6 +437,25 @@ CREATE TABLE `redcap_external_links_users` (
 `username` varchar(255) COLLATE utf8_unicode_ci NOT NULL DEFAULT '',
 PRIMARY KEY (`ext_id`,`username`),
 KEY `username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
+CREATE TABLE `redcap_external_module_settings` (
+`external_module_id` int(11) NOT NULL,
+`project_id` int(11) DEFAULT NULL,
+`key` varchar(255) COLLATE utf8_unicode_ci NOT NULL,
+`type` varchar(12) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'string',
+`value` text COLLATE utf8_unicode_ci NOT NULL,
+KEY `external_module_id` (`external_module_id`),
+KEY `key` (`key`),
+KEY `project_id` (`project_id`),
+KEY `value` (`value`(255))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
+CREATE TABLE `redcap_external_modules` (
+`external_module_id` int(11) NOT NULL AUTO_INCREMENT,
+`directory_prefix` varchar(255) COLLATE utf8_unicode_ci NOT NULL,
+PRIMARY KEY (`external_module_id`),
+UNIQUE KEY `directory_prefix` (`directory_prefix`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 CREATE TABLE `redcap_folders` (
@@ -581,11 +629,13 @@ CREATE TABLE `redcap_log_view_requests` (
 `php_process_id` int(10) DEFAULT NULL COMMENT 'Process ID for PHP',
 `script_execution_time` float DEFAULT NULL COMMENT 'Total PHP script execution time (seconds)',
 `is_ajax` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'Is request an AJAX request?',
+`ui_id` int(11) DEFAULT NULL COMMENT 'FK from redcap_user_information',
 PRIMARY KEY (`lvr_id`),
 UNIQUE KEY `log_view_id` (`log_view_id`),
 UNIQUE KEY `log_view_id_time` (`log_view_id`,`script_execution_time`),
 KEY `mysql_process_id` (`mysql_process_id`),
-KEY `php_process_id` (`php_process_id`)
+KEY `php_process_id` (`php_process_id`),
+KEY `ui_id` (`ui_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 CREATE TABLE `redcap_messages` (
@@ -599,6 +649,7 @@ CREATE TABLE `redcap_messages` (
 PRIMARY KEY (`message_id`),
 KEY `attachment_doc_id` (`attachment_doc_id`),
 KEY `author_user_id` (`author_user_id`),
+KEY `message_body` (`message_body`(255)),
 KEY `sent_time` (`sent_time`),
 KEY `thread_id` (`thread_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
@@ -611,7 +662,7 @@ CREATE TABLE `redcap_messages_recipients` (
 `prioritize` tinyint(1) NOT NULL DEFAULT '0',
 `conv_leader` tinyint(1) NOT NULL DEFAULT '0',
 PRIMARY KEY (`recipient_id`),
-KEY `recipient_user_id` (`recipient_user_id`),
+UNIQUE KEY `recipient_user_thread_id` (`recipient_user_id`,`thread_id`),
 KEY `thread_id_users` (`thread_id`,`all_users`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
@@ -620,13 +671,11 @@ CREATE TABLE `redcap_messages_status` (
 `message_id` int(10) DEFAULT NULL COMMENT 'FK from redcap_messages',
 `recipient_id` int(10) DEFAULT NULL COMMENT 'Individual recipient in thread (FK from redcap_messages_recipients)',
 `recipient_user_id` int(10) DEFAULT NULL COMMENT 'Individual recipient in thread (FK from redcap_user_information)',
-`viewed_time` datetime DEFAULT NULL COMMENT 'Time message was viewed (NULL = not viewed yet)',
 `urgent` tinyint(1) NOT NULL DEFAULT '0',
 PRIMARY KEY (`status_id`),
 KEY `message_id` (`message_id`),
 KEY `recipient_id` (`recipient_id`),
-KEY `recipient_user_id` (`recipient_user_id`),
-KEY `viewed_time` (`viewed_time`)
+KEY `recipient_user_id` (`recipient_user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 CREATE TABLE `redcap_messages_threads` (
@@ -635,7 +684,9 @@ CREATE TABLE `redcap_messages_threads` (
 `channel_name` varchar(100) COLLATE utf8_unicode_ci DEFAULT NULL COMMENT 'Only for channels',
 `invisible` tinyint(1) NOT NULL DEFAULT '0',
 `archived` tinyint(1) NOT NULL DEFAULT '0',
+`project_id` int(11) DEFAULT NULL COMMENT 'Associated project',
 PRIMARY KEY (`thread_id`),
+KEY `project_id` (`project_id`),
 KEY `type_channel` (`type`,`channel_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
@@ -897,6 +948,7 @@ CREATE TABLE `redcap_projects` (
 `data_resolution_enabled` int(1) NOT NULL DEFAULT '1' COMMENT '0=Disabled, 1=Field comment log, 2=Data Quality resolution workflow',
 `field_comment_edit_delete` int(1) NOT NULL DEFAULT '1' COMMENT 'Allow users to edit or delete Field Comments',
 `realtime_webservice_enabled` int(1) NOT NULL DEFAULT '0' COMMENT 'Is real-time web service enabled for external data import?',
+`realtime_webservice_type` enum('CUSTOM','FHIR') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'CUSTOM',
 `realtime_webservice_offset_days` float NOT NULL DEFAULT '1' COMMENT 'Default value of days offset',
 `realtime_webservice_offset_plusminus` enum('+','-','+-') COLLATE utf8_unicode_ci NOT NULL DEFAULT '+-' COMMENT 'Default value of plus-minus range for days offset',
 `last_logged_event` datetime DEFAULT NULL,
@@ -1300,6 +1352,14 @@ CREATE TABLE `redcap_surveys` (
 `repeat_survey_enabled` tinyint(1) NOT NULL DEFAULT '0',
 `repeat_survey_btn_text` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
 `repeat_survey_btn_location` enum('BEFORE_SUBMIT','AFTER_SUBMIT') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'BEFORE_SUBMIT',
+`response_limit` int(7) DEFAULT NULL,
+`response_limit_include_partials` tinyint(1) NOT NULL DEFAULT '1',
+`response_limit_custom_text` text COLLATE utf8_unicode_ci,
+`survey_time_limit_days` smallint(3) DEFAULT NULL,
+`survey_time_limit_hours` tinyint(2) DEFAULT NULL,
+`survey_time_limit_minutes` tinyint(2) DEFAULT NULL,
+`email_participant_field` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
+`end_of_survey_pdf_download` tinyint(4) NOT NULL DEFAULT '0',
 PRIMARY KEY (`survey_id`),
 UNIQUE KEY `logo` (`logo`),
 UNIQUE KEY `project_form` (`project_id`,`form_name`),
@@ -1378,6 +1438,8 @@ CREATE TABLE `redcap_surveys_participants` (
 `participant_identifier` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
 `participant_phone` varchar(50) COLLATE utf8_unicode_ci DEFAULT NULL,
 `delivery_preference` enum('EMAIL','VOICE_INITIATE','SMS_INITIATE','SMS_INVITE_MAKE_CALL','SMS_INVITE_RECEIVE_CALL','SMS_INVITE_WEB') COLLATE utf8_unicode_ci DEFAULT NULL,
+`link_expiration` datetime DEFAULT NULL,
+`link_expiration_override` tinyint(1) NOT NULL DEFAULT '0',
 PRIMARY KEY (`participant_id`),
 UNIQUE KEY `access_code` (`access_code`),
 UNIQUE KEY `access_code_numeral` (`access_code_numeral`),
@@ -1511,7 +1573,7 @@ CREATE TABLE `redcap_surveys_scheduler_queue` (
 `scheduled_time_to_send` datetime DEFAULT NULL COMMENT 'Time invitation will be sent',
 `status` enum('QUEUED','SENDING','SENT','DID NOT SEND','DELETED') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'QUEUED' COMMENT 'Survey invitation status (default=QUEUED)',
 `time_sent` datetime DEFAULT NULL COMMENT 'Actual time invitation was sent',
-`reason_not_sent` enum('EMAIL ADDRESS NOT FOUND','PHONE NUMBER NOT FOUND','EMAIL ATTEMPT FAILED','UNKNOWN','SURVEY ALREADY COMPLETED','VOICE/SMS SETTING DISABLED','ERROR SENDING SMS','ERROR MAKING VOICE CALL') COLLATE utf8_unicode_ci DEFAULT NULL COMMENT 'Explanation of why invitation did not send, if applicable',
+`reason_not_sent` enum('EMAIL ADDRESS NOT FOUND','PHONE NUMBER NOT FOUND','EMAIL ATTEMPT FAILED','UNKNOWN','SURVEY ALREADY COMPLETED','VOICE/SMS SETTING DISABLED','ERROR SENDING SMS','ERROR MAKING VOICE CALL','LINK HAD ALREADY EXPIRED') COLLATE utf8_unicode_ci DEFAULT NULL COMMENT 'Explanation of why invitation did not send, if applicable',
 PRIMARY KEY (`ssq_id`),
 UNIQUE KEY `email_recip_id_record` (`email_recip_id`,`record`,`reminder_num`,`instance`),
 UNIQUE KEY `ss_id_record` (`ss_id`,`record`,`reminder_num`,`instance`),
@@ -1614,10 +1676,11 @@ CREATE TABLE `redcap_user_information` (
 `two_factor_auth_twilio_prompt_phone` tinyint(1) NOT NULL DEFAULT '1',
 `two_factor_auth_code_expiration` int(3) NOT NULL DEFAULT '2',
 `api_token` varchar(64) COLLATE utf8_unicode_ci DEFAULT NULL,
-`messaging_email_preference` enum('NONE','X_HOURS','DAILY','ALL') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'X_HOURS',
+`messaging_email_preference` enum('NONE','2_HOURS','4_HOURS','6_HOURS','8_HOURS','12_HOURS','DAILY') COLLATE utf8_unicode_ci NOT NULL DEFAULT '4_HOURS',
 `messaging_email_urgent_all` tinyint(1) NOT NULL DEFAULT '1',
 `messaging_email_ts` datetime DEFAULT NULL,
 `ui_state` mediumtext COLLATE utf8_unicode_ci,
+`api_token_auto_request` tinyint(1) NOT NULL DEFAULT '0',
 PRIMARY KEY (`ui_id`),
 UNIQUE KEY `api_token` (`api_token`),
 UNIQUE KEY `email2_verify_code` (`email2_verify_code`),
@@ -1825,6 +1888,16 @@ ADD FOREIGN KEY (`docs_id`) REFERENCES `redcap_docs` (`docs_id`) ON DELETE CASCA
 ALTER TABLE `redcap_edocs_metadata`
 ADD FOREIGN KEY (`project_id`) REFERENCES `redcap_projects` (`project_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
+ALTER TABLE `redcap_ehr_access_tokens`
+ADD FOREIGN KEY (`token_owner`) REFERENCES `redcap_user_information` (`ui_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE `redcap_ehr_user_map`
+ADD FOREIGN KEY (`redcap_userid`) REFERENCES `redcap_user_information` (`ui_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE `redcap_ehr_user_projects`
+ADD FOREIGN KEY (`project_id`) REFERENCES `redcap_projects` (`project_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD FOREIGN KEY (`redcap_userid`) REFERENCES `redcap_user_information` (`ui_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 ALTER TABLE `redcap_esignatures`
 ADD FOREIGN KEY (`event_id`) REFERENCES `redcap_events_metadata` (`event_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD FOREIGN KEY (`project_id`) REFERENCES `redcap_projects` (`project_id`) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1861,6 +1934,10 @@ ADD FOREIGN KEY (`project_id`) REFERENCES `redcap_projects` (`project_id`) ON DE
 ALTER TABLE `redcap_external_links_users`
 ADD FOREIGN KEY (`ext_id`) REFERENCES `redcap_external_links` (`ext_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+ALTER TABLE `redcap_external_module_settings`
+ADD FOREIGN KEY (`external_module_id`) REFERENCES `redcap_external_modules` (`external_module_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD FOREIGN KEY (`project_id`) REFERENCES `redcap_projects` (`project_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 ALTER TABLE `redcap_folders`
 ADD FOREIGN KEY (`ui_id`) REFERENCES `redcap_user_information` (`ui_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -1883,7 +1960,8 @@ ALTER TABLE `redcap_locking_labels`
 ADD FOREIGN KEY (`project_id`) REFERENCES `redcap_projects` (`project_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE `redcap_log_view_requests`
-ADD FOREIGN KEY (`log_view_id`) REFERENCES `redcap_log_view` (`log_view_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ADD FOREIGN KEY (`log_view_id`) REFERENCES `redcap_log_view` (`log_view_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ADD FOREIGN KEY (`ui_id`) REFERENCES `redcap_user_information` (`ui_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE `redcap_messages`
 ADD FOREIGN KEY (`attachment_doc_id`) REFERENCES `redcap_edocs_metadata` (`doc_id`) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -1898,6 +1976,9 @@ ALTER TABLE `redcap_messages_status`
 ADD FOREIGN KEY (`message_id`) REFERENCES `redcap_messages` (`message_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD FOREIGN KEY (`recipient_id`) REFERENCES `redcap_messages_recipients` (`recipient_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD FOREIGN KEY (`recipient_user_id`) REFERENCES `redcap_user_information` (`ui_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE `redcap_messages_threads`
+ADD FOREIGN KEY (`project_id`) REFERENCES `redcap_projects` (`project_id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE `redcap_metadata`
 ADD FOREIGN KEY (`edoc_id`) REFERENCES `redcap_edocs_metadata` (`doc_id`) ON DELETE SET NULL ON UPDATE CASCADE,
@@ -1988,7 +2069,7 @@ ALTER TABLE `redcap_record_counts`
 ADD FOREIGN KEY (`project_id`) REFERENCES `redcap_projects` (`project_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE `redcap_record_dashboards`
-ADD FOREIGN KEY (`project_id`) REFERENCES `redcap_projects` (`project_id`),
+ADD FOREIGN KEY (`project_id`) REFERENCES `redcap_projects` (`project_id`) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD FOREIGN KEY (`sort_event_id`) REFERENCES `redcap_events_metadata` (`event_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE `redcap_reports`
@@ -2122,7 +2203,8 @@ INSERT INTO redcap_crons (cron_name, cron_description, cron_enabled, cron_freque
 ('DDPFetchRecordsAllProjects', 'Fetch data from the external source system for records already queued by the DDP service.', 'ENABLED', 60, 1800, 10, 0, NULL, 0, NULL),
 ('PurgeCronHistory', 'Purges all rows from the crons history table that are older than one week.', 'ENABLED', 86400, 600, 1, 0, NULL, 0, NULL),
 ('UpdateUserPasswordAlgo', 'Send email to all Table-based users telling them to log in for the purpose of upgrading their password security (one time only)', 'DISABLED', 86400, 7200, 1, 0, NULL, 0, NULL),
-('AutomatedSurveyInvitationsDatediffChecker', 'Check all conditional logic in Automated Surveys Invitations that uses "today" inside datediff() function', 'ENABLED', 43200, 7200, 1, 0, NULL, 0, NULL),
+('AutomatedSurveyInvitationsDatediffChecker', 'Check all conditional logic in Automated Surveys Invitations that uses "today" inside datediff() function', 'DISABLED', 43200, 7200, 1, 0, NULL, 0, NULL),
+('AutomatedSurveyInvitationsDatediffChecker2', 'Check all conditional logic in Automated Surveys Invitations that uses "today" inside datediff() function - replacement for AutomatedSurveyInvitationsDatediffChecker', 'ENABLED', 14400, 7200, 1, 0, NULL, 0, NULL),
 ('ClearSurveyShortCodes', 'Clear all survey short codes older than X minutes.',  'ENABLED',  300,  60,  1,  0, NULL , 0, NULL),
 ('ClearLogViewRequests', 'Clear all items from redcap_log_view_requests table older than X hours.',  'ENABLED',  1800,  300,  1,  0, NULL , 0, NULL),
 ('EraseTwilioLog', 'Clear all items from redcap_surveys_erase_twilio_log table.',  'ENABLED',  120,  300,  1,  0, NULL , 0, NULL),
@@ -2131,7 +2213,8 @@ INSERT INTO redcap_crons (cron_name, cron_description, cron_enabled, cron_freque
 ('DbUsage', 'Record the daily space usage of the database tables and the uploaded files stored on the server.', 'ENABLED', 86400, 600, 1, 0, NULL, 0, NULL),
 ('RemoveOutdatedRecordCounts', 'Delete all rows from the record counts table older than X days.', 'ENABLED', 3600, 60, 1, 0, NULL, 0, NULL),
 ('DDPReencryptData', 'Re-encrypt all DDP data from the external source system.', 'ENABLED', 60, 1800, 10, 0, NULL, 0, NULL),
-('UserMessagingEmailNotifications', 'Send notification emails to users who are logged out but have received a user message or notification.', 'ENABLED', 60, 600, 1, 0, NULL, 0, NULL);
+('UserMessagingEmailNotifications', 'Send notification emails to users who are logged out but have received a user message or notification.', 'ENABLED', 60, 600, 1, 0, NULL, 0, NULL),
+('CacheStatsReportingUrl', 'Generate the stats reporting URL and store it in the config table.', 'ENABLED', 10800, 1200, 1, 0, NULL, 0, NULL);
 
 INSERT INTO redcap_auth_questions (qid, question) VALUES
 (1, 'What was your childhood nickname?'),
@@ -2157,7 +2240,17 @@ INSERT INTO redcap_auth_questions (qid, question) VALUES
 (21, 'What is the name of a college you applied to but didn''t attend?');
 
 INSERT INTO redcap_config (field_name, value) VALUES
-('user_messaging_enabled', '0'),
+('fhir_ddp_enabled', '0'),
+('api_token_request_type', 'admin_approve'),
+('fhir_endpoint_authorize_url', ''),
+('fhir_endpoint_token_url', ''),
+('fhir_ehr_type', ''),
+('fhir_ehr_mrn_identifier', ''),
+('fhir_client_id', ''),
+('fhir_client_secret', ''),
+('fhir_endpoint_base_url', ''),
+('report_stats_url', ''),
+('user_messaging_enabled', '1'),
 ('auto_prod_changes_check_identifiers', '0'),
 ('bioportal_api_url', 'http://data.bioontology.org/'),
 ('send_emails_admin_tasks', '1'),
@@ -2331,7 +2424,7 @@ INSERT INTO `redcap_validation_types` (`validation_name`, `validation_label`, `r
 ('datetime_seconds_mdy', 'Datetime w/ seconds (M-D-Y H:M:S)', '/^((02([-\\/])29\\3(\\d{2}([13579][26]|[2468][048]|04|08)|(1600|2[048]00)))|((((0[1-9]|1[012])([-\\/])(0[1-9]|1\\d|2[0-8]))|((0[13-9]|1[012])([-\\/])(29|30))|((0[13578]|1[02])([-\\/])31))(\\11|\\15|\\19)\\d{4})) (\\d|[0-1]\\d|[2][0-3])(:[0-5]\\d){2}$/', '/^((02([-\\/])29\\3(\\d{2}([13579][26]|[2468][048]|04|08)|(1600|2[048]00)))|((((0[1-9]|1[012])([-\\/])(0[1-9]|1\\d|2[0-8]))|((0[13-9]|1[012])([-\\/])(29|30))|((0[13578]|1[02])([-\\/])31))(\\11|\\15|\\19)\\d{4})) (\\d|[0-1]\\d|[2][0-3])(:[0-5]\\d){2}$/', 'datetime_seconds', NULL, 1),
 ('datetime_seconds_ymd', 'Datetime w/ seconds (Y-M-D H:M:S)', '/^(((\\d{2}([13579][26]|[2468][048]|04|08)|(1600|2[048]00))([-\\/])02(\\6)29)|(\\d{4}([-\\/])((0[1-9]|1[012])(\\9)(0[1-9]|1\\d|2[0-8])|((0[13-9]|1[012])(\\9)(29|30))|((0[13578]|1[02])(\\9)31)))) (\\d|[0-1]\\d|[2][0-3])(:[0-5]\\d){2}$/', '/^(((\\d{2}([13579][26]|[2468][048]|04|08)|(1600|2[048]00))([-\\/])02(\\6)29)|(\\d{4}([-\\/])((0[1-9]|1[012])(\\9)(0[1-9]|1\\d|2[0-8])|((0[13-9]|1[012])(\\9)(29|30))|((0[13578]|1[02])(\\9)31)))) (\\d|[0-1]\\d|[2][0-3])(:[0-5]\\d){2}$/', 'datetime_seconds', 'datetime_seconds', 1),
 ('datetime_ymd', 'Datetime (Y-M-D H:M)', '/^(((\\d{2}([13579][26]|[2468][048]|04|08)|(1600|2[048]00))([-\\/])02(\\6)29)|(\\d{4}([-\\/])((0[1-9]|1[012])(\\9)(0[1-9]|1\\d|2[0-8])|((0[13-9]|1[012])(\\9)(29|30))|((0[13578]|1[02])(\\9)31)))) (\\d|[0-1]\\d|[2][0-3]):[0-5]\\d$/', '/^(((\\d{2}([13579][26]|[2468][048]|04|08)|(1600|2[048]00))([-\\/])02(\\6)29)|(\\d{4}([-\\/])((0[1-9]|1[012])(\\9)(0[1-9]|1\\d|2[0-8])|((0[13-9]|1[012])(\\9)(29|30))|((0[13578]|1[02])(\\9)31)))) (\\d|[0-1]\\d|[2][0-3]):[0-5]\\d$/', 'datetime', 'datetime', 1),
-('email', 'Email', '/^([_a-z0-9-'']+)([.+][_a-z0-9-'']+)*@([a-z0-9-]+)(\\.[a-z0-9-]+)*(\\.[a-z]{2,63})$/i', '/^([_a-z0-9-'']+)([.+][_a-z0-9-'']+)*@([a-z0-9-]+)(\\.[a-z0-9-]+)*(\\.[a-z]{2,63})$/i', 'email', NULL, 1),
+('email', 'Email', '/^(?!\\.)((?!.*\\.{2})[a-zA-Z0-9\\u0080-\\u00FF\\u0100-\\u017F\\u0180-\\u024F\\u0250-\\u02AF\\u0300-\\u036F\\u0370-\\u03FF\\u0400-\\u04FF\\u0500-\\u052F\\u0530-\\u058F\\u0590-\\u05FF\\u0600-\\u06FF\\u0700-\\u074F\\u0750-\\u077F\\u0780-\\u07BF\\u07C0-\\u07FF\\u0900-\\u097F\\u0980-\\u09FF\\u0A00-\\u0A7F\\u0A80-\\u0AFF\\u0B00-\\u0B7F\\u0B80-\\u0BFF\\u0C00-\\u0C7F\\u0C80-\\u0CFF\\u0D00-\\u0D7F\\u0D80-\\u0DFF\\u0E00-\\u0E7F\\u0E80-\\u0EFF\\u0F00-\\u0FFF\\u1000-\\u109F\\u10A0-\\u10FF\\u1100-\\u11FF\\u1200-\\u137F\\u1380-\\u139F\\u13A0-\\u13FF\\u1400-\\u167F\\u1680-\\u169F\\u16A0-\\u16FF\\u1700-\\u171F\\u1720-\\u173F\\u1740-\\u175F\\u1760-\\u177F\\u1780-\\u17FF\\u1800-\\u18AF\\u1900-\\u194F\\u1950-\\u197F\\u1980-\\u19DF\\u19E0-\\u19FF\\u1A00-\\u1A1F\\u1B00-\\u1B7F\\u1D00-\\u1D7F\\u1D80-\\u1DBF\\u1DC0-\\u1DFF\\u1E00-\\u1EFF\\u1F00-\\u1FFF\\u20D0-\\u20FF\\u2100-\\u214F\\u2C00-\\u2C5F\\u2C60-\\u2C7F\\u2C80-\\u2CFF\\u2D00-\\u2D2F\\u2D30-\\u2D7F\\u2D80-\\u2DDF\\u2F00-\\u2FDF\\u2FF0-\\u2FFF\\u3040-\\u309F\\u30A0-\\u30FF\\u3100-\\u312F\\u3130-\\u318F\\u3190-\\u319F\\u31C0-\\u31EF\\u31F0-\\u31FF\\u3200-\\u32FF\\u3300-\\u33FF\\u3400-\\u4DBF\\u4DC0-\\u4DFF\\u4E00-\\u9FFF\\uA000-\\uA48F\\uA490-\\uA4CF\\uA700-\\uA71F\\uA800-\\uA82F\\uA840-\\uA87F\\uAC00-\\uD7AF\\uF900-\\uFAFF\\.!#$%&\'*+-/=?^_`{|}~\\-\\d]+)@(?!\\.)([a-zA-Z0-9\\u0080-\\u00FF\\u0100-\\u017F\\u0180-\\u024F\\u0250-\\u02AF\\u0300-\\u036F\\u0370-\\u03FF\\u0400-\\u04FF\\u0500-\\u052F\\u0530-\\u058F\\u0590-\\u05FF\\u0600-\\u06FF\\u0700-\\u074F\\u0750-\\u077F\\u0780-\\u07BF\\u07C0-\\u07FF\\u0900-\\u097F\\u0980-\\u09FF\\u0A00-\\u0A7F\\u0A80-\\u0AFF\\u0B00-\\u0B7F\\u0B80-\\u0BFF\\u0C00-\\u0C7F\\u0C80-\\u0CFF\\u0D00-\\u0D7F\\u0D80-\\u0DFF\\u0E00-\\u0E7F\\u0E80-\\u0EFF\\u0F00-\\u0FFF\\u1000-\\u109F\\u10A0-\\u10FF\\u1100-\\u11FF\\u1200-\\u137F\\u1380-\\u139F\\u13A0-\\u13FF\\u1400-\\u167F\\u1680-\\u169F\\u16A0-\\u16FF\\u1700-\\u171F\\u1720-\\u173F\\u1740-\\u175F\\u1760-\\u177F\\u1780-\\u17FF\\u1800-\\u18AF\\u1900-\\u194F\\u1950-\\u197F\\u1980-\\u19DF\\u19E0-\\u19FF\\u1A00-\\u1A1F\\u1B00-\\u1B7F\\u1D00-\\u1D7F\\u1D80-\\u1DBF\\u1DC0-\\u1DFF\\u1E00-\\u1EFF\\u1F00-\\u1FFF\\u20D0-\\u20FF\\u2100-\\u214F\\u2C00-\\u2C5F\\u2C60-\\u2C7F\\u2C80-\\u2CFF\\u2D00-\\u2D2F\\u2D30-\\u2D7F\\u2D80-\\u2DDF\\u2F00-\\u2FDF\\u2FF0-\\u2FFF\\u3040-\\u309F\\u30A0-\\u30FF\\u3100-\\u312F\\u3130-\\u318F\\u3190-\\u319F\\u31C0-\\u31EF\\u31F0-\\u31FF\\u3200-\\u32FF\\u3300-\\u33FF\\u3400-\\u4DBF\\u4DC0-\\u4DFF\\u4E00-\\u9FFF\\uA000-\\uA48F\\uA490-\\uA4CF\\uA700-\\uA71F\\uA800-\\uA82F\\uA840-\\uA87F\\uAC00-\\uD7AF\\uF900-\\uFAFF\\-\\.\\d]+)((\\.([a-zA-Z\\u0080-\\u00FF\\u0100-\\u017F\\u0180-\\u024F\\u0250-\\u02AF\\u0300-\\u036F\\u0370-\\u03FF\\u0400-\\u04FF\\u0500-\\u052F\\u0530-\\u058F\\u0590-\\u05FF\\u0600-\\u06FF\\u0700-\\u074F\\u0750-\\u077F\\u0780-\\u07BF\\u07C0-\\u07FF\\u0900-\\u097F\\u0980-\\u09FF\\u0A00-\\u0A7F\\u0A80-\\u0AFF\\u0B00-\\u0B7F\\u0B80-\\u0BFF\\u0C00-\\u0C7F\\u0C80-\\u0CFF\\u0D00-\\u0D7F\\u0D80-\\u0DFF\\u0E00-\\u0E7F\\u0E80-\\u0EFF\\u0F00-\\u0FFF\\u1000-\\u109F\\u10A0-\\u10FF\\u1100-\\u11FF\\u1200-\\u137F\\u1380-\\u139F\\u13A0-\\u13FF\\u1400-\\u167F\\u1680-\\u169F\\u16A0-\\u16FF\\u1700-\\u171F\\u1720-\\u173F\\u1740-\\u175F\\u1760-\\u177F\\u1780-\\u17FF\\u1800-\\u18AF\\u1900-\\u194F\\u1950-\\u197F\\u1980-\\u19DF\\u19E0-\\u19FF\\u1A00-\\u1A1F\\u1B00-\\u1B7F\\u1D00-\\u1D7F\\u1D80-\\u1DBF\\u1DC0-\\u1DFF\\u1E00-\\u1EFF\\u1F00-\\u1FFF\\u20D0-\\u20FF\\u2100-\\u214F\\u2C00-\\u2C5F\\u2C60-\\u2C7F\\u2C80-\\u2CFF\\u2D00-\\u2D2F\\u2D30-\\u2D7F\\u2D80-\\u2DDF\\u2F00-\\u2FDF\\u2FF0-\\u2FFF\\u3040-\\u309F\\u30A0-\\u30FF\\u3100-\\u312F\\u3130-\\u318F\\u3190-\\u319F\\u31C0-\\u31EF\\u31F0-\\u31FF\\u3200-\\u32FF\\u3300-\\u33FF\\u3400-\\u4DBF\\u4DC0-\\u4DFF\\u4E00-\\u9FFF\\uA000-\\uA48F\\uA490-\\uA4CF\\uA700-\\uA71F\\uA800-\\uA82F\\uA840-\\uA87F\\uAC00-\\uD7AF\\uF900-\\uFAFF]){2,63})+)$/i', '/^(?!\\.)((?!.*\\.{2})[a-zA-Z0-9\\x{0080}-\\x{00FF}\\x{0100}-\\x{017F}\\x{0180}-\\x{024F}\\x{0250}-\\x{02AF}\\x{0300}-\\x{036F}\\x{0370}-\\x{03FF}\\x{0400}-\\x{04FF}\\x{0500}-\\x{052F}\\x{0530}-\\x{058F}\\x{0590}-\\x{05FF}\\x{0600}-\\x{06FF}\\x{0700}-\\x{074F}\\x{0750}-\\x{077F}\\x{0780}-\\x{07BF}\\x{07C0}-\\x{07FF}\\x{0900}-\\x{097F}\\x{0980}-\\x{09FF}\\x{0A00}-\\x{0A7F}\\x{0A80}-\\x{0AFF}\\x{0B00}-\\x{0B7F}\\x{0B80}-\\x{0BFF}\\x{0C00}-\\x{0C7F}\\x{0C80}-\\x{0CFF}\\x{0D00}-\\x{0D7F}\\x{0D80}-\\x{0DFF}\\x{0E00}-\\x{0E7F}\\x{0E80}-\\x{0EFF}\\x{0F00}-\\x{0FFF}\\x{1000}-\\x{109F}\\x{10A0}-\\x{10FF}\\x{1100}-\\x{11FF}\\x{1200}-\\x{137F}\\x{1380}-\\x{139F}\\x{13A0}-\\x{13FF}\\x{1400}-\\x{167F}\\x{1680}-\\x{169F}\\x{16A0}-\\x{16FF}\\x{1700}-\\x{171F}\\x{1720}-\\x{173F}\\x{1740}-\\x{175F}\\x{1760}-\\x{177F}\\x{1780}-\\x{17FF}\\x{1800}-\\x{18AF}\\x{1900}-\\x{194F}\\x{1950}-\\x{197F}\\x{1980}-\\x{19DF}\\x{19E0}-\\x{19FF}\\x{1A00}-\\x{1A1F}\\x{1B00}-\\x{1B7F}\\x{1D00}-\\x{1D7F}\\x{1D80}-\\x{1DBF}\\x{1DC0}-\\x{1DFF}\\x{1E00}-\\x{1EFF}\\x{1F00}-\\x{1FFF}\\x{20D0}-\\x{20FF}\\x{2100}-\\x{214F}\\x{2C00}-\\x{2C5F}\\x{2C60}-\\x{2C7F}\\x{2C80}-\\x{2CFF}\\x{2D00}-\\x{2D2F}\\x{2D30}-\\x{2D7F}\\x{2D80}-\\x{2DDF}\\x{2F00}-\\x{2FDF}\\x{2FF0}-\\x{2FFF}\\x{3040}-\\x{309F}\\x{30A0}-\\x{30FF}\\x{3100}-\\x{312F}\\x{3130}-\\x{318F}\\x{3190}-\\x{319F}\\x{31C0}-\\x{31EF}\\x{31F0}-\\x{31FF}\\x{3200}-\\x{32FF}\\x{3300}-\\x{33FF}\\x{3400}-\\x{4DBF}\\x{4DC0}-\\x{4DFF}\\x{4E00}-\\x{9FFF}\\x{A000}-\\x{A48F}\\x{A490}-\\x{A4CF}\\x{A700}-\\x{A71F}\\x{A800}-\\x{A82F}\\x{A840}-\\x{A87F}\\x{AC00}-\\x{D7AF}\\x{F900}-\\x{FAFF}\\.!#$%&\'*+-\\/=?^_`{|}~\\-\\d]+)@(?!\\.)([a-zA-Z0-9\\x{0080}-\\x{00FF}\\x{0100}-\\x{017F}\\x{0180}-\\x{024F}\\x{0250}-\\x{02AF}\\x{0300}-\\x{036F}\\x{0370}-\\x{03FF}\\x{0400}-\\x{04FF}\\x{0500}-\\x{052F}\\x{0530}-\\x{058F}\\x{0590}-\\x{05FF}\\x{0600}-\\x{06FF}\\x{0700}-\\x{074F}\\x{0750}-\\x{077F}\\x{0780}-\\x{07BF}\\x{07C0}-\\x{07FF}\\x{0900}-\\x{097F}\\x{0980}-\\x{09FF}\\x{0A00}-\\x{0A7F}\\x{0A80}-\\x{0AFF}\\x{0B00}-\\x{0B7F}\\x{0B80}-\\x{0BFF}\\x{0C00}-\\x{0C7F}\\x{0C80}-\\x{0CFF}\\x{0D00}-\\x{0D7F}\\x{0D80}-\\x{0DFF}\\x{0E00}-\\x{0E7F}\\x{0E80}-\\x{0EFF}\\x{0F00}-\\x{0FFF}\\x{1000}-\\x{109F}\\x{10A0}-\\x{10FF}\\x{1100}-\\x{11FF}\\x{1200}-\\x{137F}\\x{1380}-\\x{139F}\\x{13A0}-\\x{13FF}\\x{1400}-\\x{167F}\\x{1680}-\\x{169F}\\x{16A0}-\\x{16FF}\\x{1700}-\\x{171F}\\x{1720}-\\x{173F}\\x{1740}-\\x{175F}\\x{1760}-\\x{177F}\\x{1780}-\\x{17FF}\\x{1800}-\\x{18AF}\\x{1900}-\\x{194F}\\x{1950}-\\x{197F}\\x{1980}-\\x{19DF}\\x{19E0}-\\x{19FF}\\x{1A00}-\\x{1A1F}\\x{1B00}-\\x{1B7F}\\x{1D00}-\\x{1D7F}\\x{1D80}-\\x{1DBF}\\x{1DC0}-\\x{1DFF}\\x{1E00}-\\x{1EFF}\\x{1F00}-\\x{1FFF}\\x{20D0}-\\x{20FF}\\x{2100}-\\x{214F}\\x{2C00}-\\x{2C5F}\\x{2C60}-\\x{2C7F}\\x{2C80}-\\x{2CFF}\\x{2D00}-\\x{2D2F}\\x{2D30}-\\x{2D7F}\\x{2D80}-\\x{2DDF}\\x{2F00}-\\x{2FDF}\\x{2FF0}-\\x{2FFF}\\x{3040}-\\x{309F}\\x{30A0}-\\x{30FF}\\x{3100}-\\x{312F}\\x{3130}-\\x{318F}\\x{3190}-\\x{319F}\\x{31C0}-\\x{31EF}\\x{31F0}-\\x{31FF}\\x{3200}-\\x{32FF}\\x{3300}-\\x{33FF}\\x{3400}-\\x{4DBF}\\x{4DC0}-\\x{4DFF}\\x{4E00}-\\x{9FFF}\\x{A000}-\\x{A48F}\\x{A490}-\\x{A4CF}\\x{A700}-\\x{A71F}\\x{A800}-\\x{A82F}\\x{A840}-\\x{A87F}\\x{AC00}-\\x{D7AF}\\x{F900}-\\x{FAFF}\\-\\.\\d]+)((\\.([a-zA-Z\\x{0080}-\\x{00FF}\\x{0100}-\\x{017F}\\x{0180}-\\x{024F}\\x{0250}-\\x{02AF}\\x{0300}-\\x{036F}\\x{0370}-\\x{03FF}\\x{0400}-\\x{04FF}\\x{0500}-\\x{052F}\\x{0530}-\\x{058F}\\x{0590}-\\x{05FF}\\x{0600}-\\x{06FF}\\x{0700}-\\x{074F}\\x{0750}-\\x{077F}\\x{0780}-\\x{07BF}\\x{07C0}-\\x{07FF}\\x{0900}-\\x{097F}\\x{0980}-\\x{09FF}\\x{0A00}-\\x{0A7F}\\x{0A80}-\\x{0AFF}\\x{0B00}-\\x{0B7F}\\x{0B80}-\\x{0BFF}\\x{0C00}-\\x{0C7F}\\x{0C80}-\\x{0CFF}\\x{0D00}-\\x{0D7F}\\x{0D80}-\\x{0DFF}\\x{0E00}-\\x{0E7F}\\x{0E80}-\\x{0EFF}\\x{0F00}-\\x{0FFF}\\x{1000}-\\x{109F}\\x{10A0}-\\x{10FF}\\x{1100}-\\x{11FF}\\x{1200}-\\x{137F}\\x{1380}-\\x{139F}\\x{13A0}-\\x{13FF}\\x{1400}-\\x{167F}\\x{1680}-\\x{169F}\\x{16A0}-\\x{16FF}\\x{1700}-\\x{171F}\\x{1720}-\\x{173F}\\x{1740}-\\x{175F}\\x{1760}-\\x{177F}\\x{1780}-\\x{17FF}\\x{1800}-\\x{18AF}\\x{1900}-\\x{194F}\\x{1950}-\\x{197F}\\x{1980}-\\x{19DF}\\x{19E0}-\\x{19FF}\\x{1A00}-\\x{1A1F}\\x{1B00}-\\x{1B7F}\\x{1D00}-\\x{1D7F}\\x{1D80}-\\x{1DBF}\\x{1DC0}-\\x{1DFF}\\x{1E00}-\\x{1EFF}\\x{1F00}-\\x{1FFF}\\x{20D0}-\\x{20FF}\\x{2100}-\\x{214F}\\x{2C00}-\\x{2C5F}\\x{2C60}-\\x{2C7F}\\x{2C80}-\\x{2CFF}\\x{2D00}-\\x{2D2F}\\x{2D30}-\\x{2D7F}\\x{2D80}-\\x{2DDF}\\x{2F00}-\\x{2FDF}\\x{2FF0}-\\x{2FFF}\\x{3040}-\\x{309F}\\x{30A0}-\\x{30FF}\\x{3100}-\\x{312F}\\x{3130}-\\x{318F}\\x{3190}-\\x{319F}\\x{31C0}-\\x{31EF}\\x{31F0}-\\x{31FF}\\x{3200}-\\x{32FF}\\x{3300}-\\x{33FF}\\x{3400}-\\x{4DBF}\\x{4DC0}-\\x{4DFF}\\x{4E00}-\\x{9FFF}\\x{A000}-\\x{A48F}\\x{A490}-\\x{A4CF}\\x{A700}-\\x{A71F}\\x{A800}-\\x{A82F}\\x{A840}-\\x{A87F}\\x{AC00}-\\x{D7AF}\\x{F900}-\\x{FAFF}]){2,63})+)$/u', 'email', NULL, 1),
 ('integer', 'Integer', '/^[-+]?\\b\\d+\\b$/', '/^[-+]?\\b\\d+\\b$/', 'integer', 'int', 1),
 ('mrn_10d', 'MRN (10 digits)', '/^\\d{10}$/', '/^\\d{10}$/', 'text', NULL, 0),
 ('number', 'Number', '/^[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?$/', '/^[-+]?[0-9]*\\.?[0-9]+([eE][-+]?[0-9]+)?$/', 'number', 'float', 1),
@@ -2371,6 +2464,11 @@ INSERT INTO redcap_messages_threads (thread_id, type, channel_name, invisible, a
 (2, 'NOTIFICATION', NULL, 0, 0),
 (3, 'NOTIFICATION', 'Notifications', 0, 0);
 
+INSERT INTO redcap_messages_recipients (recipient_id, thread_id, all_users) VALUES 
+(1, 1, 1), 
+(2, 2, 1),
+(3, 3, 1);
+
 
 -- Add custom site configuration values --
 UPDATE redcap_config SET value = 'sha512' WHERE field_name = 'password_algo';
@@ -2379,10 +2477,10 @@ UPDATE redcap_config SET value = '1' WHERE field_name = 'superusers_only_create_
 UPDATE redcap_config SET value = '1' WHERE field_name = 'superusers_only_move_to_prod';
 UPDATE redcap_config SET value = '1' WHERE field_name = 'auto_report_stats';
 UPDATE redcap_config SET value = '' WHERE field_name = 'bioportal_api_token';
-UPDATE redcap_config SET value = 'http://uhlbriccsapp03.xuhl-tr.nhs.uk/redcap_live_copy/' WHERE field_name = 'redcap_base_url';
+UPDATE redcap_config SET value = 'http://uhlbriccsapp03.xuhl-tr.nhs.uk:84/redcap_live_copy/' WHERE field_name = 'redcap_base_url';
 UPDATE redcap_config SET value = '1' WHERE field_name = 'enable_url_shortener';
 UPDATE redcap_config SET value = 'D/M/Y_12' WHERE field_name = 'default_datetime_format';
-UPDATE redcap_config SET value = ',' WHERE field_name = 'default_number_format_decimal';
+UPDATE redcap_config SET value = '.' WHERE field_name = 'default_number_format_decimal';
 UPDATE redcap_config SET value = '.' WHERE field_name = 'default_number_format_thousands_sep';
 UPDATE redcap_config SET value = 'REDCap Administrator (123-456-7890)' WHERE field_name = 'homepage_contact';
 UPDATE redcap_config SET value = 'email@yoursite.edu' WHERE field_name = 'homepage_contact_email';
@@ -2391,7 +2489,7 @@ UPDATE redcap_config SET value = 'email@yoursite.edu' WHERE field_name = 'projec
 UPDATE redcap_config SET value = 'SoAndSo University' WHERE field_name = 'institution';
 UPDATE redcap_config SET value = 'SoAndSo Institute for Clinical and Translational Research' WHERE field_name = 'site_org_type';
 UPDATE redcap_config SET value = '/var/www/html/redcap_live_copy/hook_functions.php' WHERE field_name = 'hook_functions_file';
-UPDATE redcap_config SET value = '7.2.2' WHERE field_name = 'redcap_version';
+UPDATE redcap_config SET value = '7.6.1' WHERE field_name = 'redcap_version';
 
 -- SQL TO CREATE A REDCAP DEMO PROJECT --
 set @project_title = 'Classic Database';
@@ -2408,7 +2506,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (project_name, app_title, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, display_project_logo_institution, auto_inc_set) VALUES
-(concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
+(concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO `redcap_user_rights` (`project_id`, `username`, `expiration`, `group_id`, `lock_record`, `data_export_tool`, `data_import_tool`, `data_comparison_tool`, `data_logging`, `file_repository`, `double_data`, `user_rights`, `data_access_groups`, `graphical`, `reports`, `design`, `calendar`, `data_entry`, `data_quality_execute`) VALUES
@@ -2563,7 +2661,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (project_name, app_title, repeatforms, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, display_project_logo_institution, auto_inc_set) VALUES
-(concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
+(concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO redcap_user_rights (project_id, username, expiration, group_id, lock_record, data_export_tool, data_import_tool, data_comparison_tool, data_logging, file_repository, double_data, user_rights, data_access_groups, graphical, reports, design, calendar, data_entry, `data_quality_execute`) VALUES
@@ -2733,7 +2831,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (project_name, app_title, repeatforms, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, display_project_logo_institution, auto_inc_set) VALUES
-(concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
+(concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO redcap_user_rights (project_id, username, expiration, group_id, lock_record, data_export_tool, data_import_tool, data_comparison_tool, data_logging, file_repository, double_data, user_rights, data_access_groups, graphical, reports, design, calendar, data_entry, `data_quality_execute`) VALUES
@@ -2937,7 +3035,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (project_name, app_title, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, surveys_enabled, auto_inc_set, display_project_logo_institution) VALUES
-(concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 1, 1, 0);
+(concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 1, 1, 0);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO `redcap_user_rights` (`project_id`, `username`, `expiration`, `group_id`, `lock_record`, `data_export_tool`, `data_import_tool`,
@@ -2997,7 +3095,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (project_name, app_title, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, display_project_logo_institution, auto_inc_set) VALUES
-(concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
+(concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO `redcap_user_rights` (`project_id`, `username`, `expiration`, `group_id`, `lock_record`, `data_export_tool`, `data_import_tool`, `data_comparison_tool`, `data_logging`, `file_repository`, `double_data`, `user_rights`, `data_access_groups`, `graphical`, `reports`, `design`, `calendar`, `data_entry`, `data_quality_execute`) VALUES
@@ -3044,7 +3142,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (project_name, app_title, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, display_project_logo_institution, auto_inc_set) VALUES
-(concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
+(concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO `redcap_user_rights` (`project_id`, `username`, `expiration`, `group_id`, `lock_record`, `data_export_tool`, `data_import_tool`, `data_comparison_tool`, `data_logging`, `file_repository`, `double_data`, `user_rights`, `data_access_groups`, `graphical`, `reports`, `design`, `calendar`, `data_entry`, `data_quality_execute`) VALUES
@@ -3213,7 +3311,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (project_name, app_title, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, display_project_logo_institution, randomization, auto_inc_set) VALUES
-(concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1, 1);
+(concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1, 1);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO `redcap_user_rights` (`project_id`, `username`, `expiration`, `group_id`, `lock_record`, `data_export_tool`, `data_import_tool`, `data_comparison_tool`, `data_logging`, `file_repository`, `double_data`, `user_rights`, `data_access_groups`, `graphical`, `reports`, `design`, `calendar`, `data_entry`, `data_quality_execute`, random_setup, random_dashboard, random_perform) VALUES
@@ -3360,7 +3458,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (project_name, app_title, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, display_project_logo_institution, randomization, auto_inc_set) VALUES
-(concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 0, 1);
+(concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 0, 1);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO `redcap_user_rights` (`project_id`, `username`, `expiration`, `group_id`, `lock_record`, `data_export_tool`, `data_import_tool`, `data_comparison_tool`, `data_logging`, `file_repository`, `double_data`, `user_rights`, `data_access_groups`, `graphical`, `reports`, `design`, `calendar`, `data_entry`, `data_quality_execute`, random_setup, random_dashboard, random_perform) VALUES
@@ -3588,7 +3686,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (survey_email_participant_field, project_name, app_title, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, surveys_enabled, auto_inc_set, display_project_logo_institution) VALUES
-('email',concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 1, 1, 0);
+('email',concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 1, 1, 0);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO `redcap_user_rights` (`project_id`, `username`, `expiration`, `group_id`, `lock_record`, `data_export_tool`, `data_import_tool`,
@@ -3653,7 +3751,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (survey_email_participant_field,project_name, app_title, status, repeatforms, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, surveys_enabled, auto_inc_set, display_project_logo_institution) VALUES
-('email',concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 1, 1, 0);
+('email',concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 1, 1, 0);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO `redcap_user_rights` (`project_id`, `username`, `expiration`, `group_id`, `lock_record`, `data_export_tool`, `data_import_tool`,
@@ -3737,7 +3835,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (project_name, app_title, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, surveys_enabled, auto_inc_set, display_project_logo_institution) VALUES
-(concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 1, 1, 0);
+(concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 1, 1, 0);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO `redcap_user_rights` (`project_id`, `username`, `expiration`, `group_id`, `lock_record`, `data_export_tool`, `data_import_tool`,
@@ -3784,7 +3882,7 @@ set @auth_meth = (select value from redcap_config where field_name = 'auth_meth_
 -- Create project --
 INSERT INTO `redcap_projects`
 (project_name, app_title, status, count_project, auth_meth, creation_time, production_time, institution, site_org_type, grant_cite, project_contact_name, project_contact_email, headerlogo, display_project_logo_institution, auto_inc_set) VALUES
-(concat('redcap_demo_',LEFT(MD5(RAND()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
+(concat('redcap_demo_',LEFT(sha1(rand()),6)), @project_title, 1, 0, @auth_meth, now(), now(), @institution, @site_org_type, @grant_cite, @project_contact_name, @project_contact_email, @headerlogo, 0, 1);
 set @project_id = LAST_INSERT_ID();
 -- User rights --
 INSERT INTO `redcap_user_rights` (`project_id`, `username`, `expiration`, `group_id`, `lock_record`, `data_export_tool`, `data_import_tool`, `data_comparison_tool`, `data_logging`, `file_repository`, `double_data`, `user_rights`, `data_access_groups`, `graphical`, `reports`, `design`, `calendar`, `data_entry`, `data_quality_execute`) VALUES
