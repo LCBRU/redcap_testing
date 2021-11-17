@@ -1,6 +1,7 @@
 import os
 import zipfile
-import math
+import re
+import smtplib
 from time import sleep
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
@@ -9,6 +10,10 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from urllib.parse import urljoin
 from pathlib import Path
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.encoders import encode_base64
+from email.mime.text import MIMEText
 
 
 # Selectors
@@ -94,41 +99,16 @@ class EnsureAction(Action):
         self.helper.get_element_selector(selector=self.selector)
 
 
-# Helpers
-class Sampler:
-    TYPE_ALL = 'all'
-    TYPE_FIBONACCI = 'fibonacci'
-    TYPE_FIRST = 'first'
-
-    def __init__(self, sampling_type=None):
-
-        self.sampling_type = sampling_type or self.TYPE_FIBONACCI
-
-    def is_sampling_pick(self, n):
-        is_perfect_square = lambda x: int(math.sqrt(x))**2 == x
-
-        if self.sampling_type.isnumeric():
-            if (n % 100) < int(self.sampling_type.isnumeric()):
-                return True
-            else:
-                return False
-
-        if self.sampling_type == Sampler.SAMPLING_TYPE_ALL:
-            return True
-        elif self.sampling_type == Sampler.SAMPLING_TYPE_FIRST:
-            return n == 0
-        else:
-            return is_perfect_square(5*n*n + 4) or is_perfect_square(5*n*n - 4)
-
-
 def get_selenium():
     args = dict(
         download_directory=os.environ["DOWNLOAD_DIRECTORY"],
+        output_directory=os.environ["OUTPUT_DIRECTORY"],
         base_url=os.environ["BASE_URL"],
         implicit_wait_time=float(os.environ["IMPLICIT_WAIT_TIME"]),
         click_wait_time=float(os.environ["CLICK_WAIT_TIME"]),
         download_wait_time=float(os.environ["DOWNLOAD_WAIT_TIME"]),
         page_wait_time=float(os.environ["PAGE_WAIT_TIME"]),
+        email_address=os.environ["EMAIL_ADDRESS"],
     )
 
     if os.environ.get("SELENIUM_HOST", None):
@@ -149,10 +129,12 @@ class SeleniumHelper:
         self,
         driver,
         download_directory,
+        output_directory,
         base_url,
         click_wait_time=0.2,
         download_wait_time=5,
         page_wait_time=1,
+        email_address=None,
     ):
         self.click_wait_time = click_wait_time
         self.download_wait_time = download_wait_time
@@ -162,36 +144,46 @@ class SeleniumHelper:
 
         self.base_url = base_url
 
-        self._download_directory = Path(download_directory)
-        self._download_directory.mkdir(parents=True, exist_ok=True)
-        self.clear_download_directory()
+        self.email_address = email_address
 
-        self.get_version()
+        self.version = self.get_version()
 
-    def close(self):
-        self.driver.close()
-    
+        self.download_directory = Path(download_directory)
+        self.download_directory.mkdir(parents=True, exist_ok=True)
+        self._clear_directory(self.download_directory)
+
+        self.output_directory = Path(output_directory) / self.version
+        self.output_directory.mkdir(parents=True, exist_ok=True)
+        self._clear_directory(self.output_directory)
+
     def get_version(self):
-        self.get('upgrade.php')
+        self.get('upgrade.php', versioned=False)
 
-        version_test = self.get_element(CssSelector('p'))
-        print(self.get_text(version_test))
-    
+        version_message = self.get_text(self.get_element(CssSelector('p')))
+        version_match = re.search('version (.+?)\. There', version_message)
+        if version_match:
+            version = version_match.group(1)
+        
+        return version
+
     def unzip_download_directory_contents(self):
         for zp in self._download_directory.iterdir():
             with zipfile.ZipFile(zp, "r") as zf:
                 zf.extractall(self._download_directory)
     
-    def clear_download_directory(self):
-        for f in self._download_directory.iterdir():
+    def _clear_directory(self, directory):
+        for f in directory.iterdir():
             f.unlink()
     
-    def get(self, url):
-        self.driver.get(urljoin(self.base_url, url))
+    def get(self, url, versioned=True):
+        if versioned:
+            base = urljoin(self.base_url, f'redcap_v{self.version}/')
+        else:
+            base = self.base_url
+
+        self.driver.get(urljoin(base, url))
         self.get_element(CssSelector('body'), allow_null=False)
 
-        # for entry in self.driver.get_log('performance'):
-        #     print (entry)
 
     def get_element(self, selector, allow_null=False, wait=10):
         try:
@@ -205,12 +197,12 @@ class SeleniumHelper:
         return self.driver.find_elements(selector.by, selector.query)
     
     def type_in_textbox(self, selector, text):
-        element = self.get_element_selector(selector)
+        element = self.get_element(selector)
         element.clear()
         element.send_keys(text)
 
     def click_element(self, selector):
-        element = self.get_element_selector(selector)
+        element = self.get_element(selector)
         element.click()
         sleep(self.click_wait_time)
     
@@ -251,9 +243,38 @@ class SeleniumHelper:
 
         return [o.get_attribute('value') for o in select.find_elements_by_tag_name('option')]
 
+    def email_screenshot(self):
+        msg = MIMEMultipart()
+        msg['Subject'] = 'Your Requested Screenshot from Selenium'
+        msg['To'] = self.email_address
+        msg['From'] = self.email_address
+
+        url = self.driver.current_url
+
+        msg.attach(MIMEText(f'Here is the screenshot that you requested of page {url}'))
+
+        part = MIMEBase('image', 'png')
+        part.set_payload(self.driver.get_screenshot_as_png())
+        encode_base64(part)
+
+        part.add_header(
+            'Content-Disposition',
+            'attachment; filename="screenshot.png"',
+        )
+
+        msg.attach(part)
+
+        s = smtplib.SMTP('smtp.xuhl-tr.nhs.uk')
+        s.send_message(msg)
+        s.quit()
+
 
 class SeleniumGridHelper(SeleniumHelper):
     def __init__(self, download_directory, selenium_host, selenium_port, implicit_wait_time, browser=DesiredCapabilities.CHROME, **kwargs):
+
+        browser['acceptInsecureCerts'] = True
+        browser['acceptSslCerts'] = True
+
 
         driver = webdriver.Remote(
             command_executor=f'http://{selenium_host}:{selenium_port}/wd/hub',
@@ -265,6 +286,9 @@ class SeleniumGridHelper(SeleniumHelper):
             download_directory=download_directory,
             **kwargs,
         )
+
+    def close(self):
+        self.driver.quit()
 
 
 class SeleniumLocalHelper(SeleniumHelper):
@@ -288,3 +312,6 @@ class SeleniumLocalHelper(SeleniumHelper):
             download_directory=download_directory,
             **kwargs,
         )
+
+    def close(self):
+        self.driver.close()
