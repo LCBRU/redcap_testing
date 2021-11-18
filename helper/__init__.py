@@ -45,7 +45,7 @@ class ItemsFile():
 
     def save(self):
         with jsonlines.open(self.output_directory / self._export_filename(), mode='w') as writer:
-            for i in sorted(self.items, key=lambda i: i['name']):
+            for i in sorted(self.items, key=lambda i: list(i.values())):
                 writer.write(i)
 
     def get_items(self):

@@ -14,6 +14,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.encoders import encode_base64
 from email.mime.text import MIMEText
+from selenium.webdriver.support.ui import WebDriverWait
 
 
 # Selectors
@@ -184,33 +185,36 @@ class SeleniumHelper:
         self.driver.get(urljoin(base, url))
         self.get_element(CssSelector('body'), allow_null=False)
 
-
-    def get_element(self, selector, allow_null=False, wait=10):
+    def wait_to_appear(self, selector, element=None, seconds_to_wait=10):
+        return WebDriverWait((element or self.driver), seconds_to_wait).until(lambda x: x.find_element(selector.by, selector.query))
+    
+    def wait_to_disappear(self, selector, element=None, seconds_to_wait=10):
+        return WebDriverWait((element or self.driver), seconds_to_wait).until_not(lambda x: x.find_element(selector.by, selector.query))
+    
+    def get_element(self, selector, allow_null=False, element=None):
         try:
-            return self.driver.find_element(selector.by, selector.query)
+            return (element or self.driver).find_element(selector.by, selector.query)
 
         except (NoSuchElementException, TimeoutException) as ex:
             if not allow_null:
                 raise ex
     
-    def get_elements(self, selector):
-        return self.driver.find_elements(selector.by, selector.query)
+    def get_elements(self, selector, element=None):
+        return (element or self.driver).find_elements(selector.by, selector.query)
     
-    def type_in_textbox(self, selector, text):
-        element = self.get_element(selector)
+    def type_in_textbox(self, selector, text, element=None):
+        element = self.get_element(selector, element=element)
         element.clear()
         element.send_keys(text)
 
-    def click_element(self, selector):
-        element = self.get_element(selector)
+    def click_element(self, selector, element=None):
+        element = self.get_element(selector, element=element)
         element.click()
         sleep(self.click_wait_time)
     
-    def click_all(self, selector):
-        wait=10
+    def click_all(self, selector, element=None):
         while True:
-            element = self.get_element(selector, allow_null=True, wait=wait)
-            wait=0.1
+            element = self.get_element(selector, allow_null=True, element=element)
 
             if element is None:
                 break
@@ -238,11 +242,6 @@ class SeleniumHelper:
     def get_innerHtml(self, element):
         return (self.driver.execute_script("return arguments[0].innerHTML", element) or '').strip()
     
-    def get_select_option_values(self, id):
-        select = self.driver.find_element_by_id(id)
-
-        return [o.get_attribute('value') for o in select.find_elements_by_tag_name('option')]
-
     def email_screenshot(self):
         msg = MIMEMultipart()
         msg['Subject'] = 'Your Requested Screenshot from Selenium'
