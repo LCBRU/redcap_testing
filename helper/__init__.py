@@ -1,4 +1,6 @@
+import logging
 import math
+import os
 import jsonlines
 from werkzeug.utils import secure_filename
 
@@ -9,9 +11,8 @@ class Sampler:
     TYPE_FIBONACCI = 'fibonacci'
     TYPE_FIRST = 'first'
 
-    def __init__(self, sampling_type=None):
-
-        self.sampling_type = sampling_type or self.TYPE_FIBONACCI
+    def __init__(self):
+        self.sampling_type = os.environ.get("SAMPLING_TYPE", self.TYPE_ALL)
 
     def is_sampling_pick(self, n):
         is_perfect_square = lambda x: int(math.sqrt(x))**2 == x
@@ -22,9 +23,9 @@ class Sampler:
             else:
                 return False
 
-        if self.sampling_type == Sampler.SAMPLING_TYPE_ALL:
+        if self.sampling_type == Sampler.TYPE_ALL:
             return True
-        elif self.sampling_type == Sampler.SAMPLING_TYPE_FIRST:
+        elif self.sampling_type == Sampler.TYPE_FIRST:
             return n == 0
         else:
             return is_perfect_square(5*n*n + 4) or is_perfect_square(5*n*n - 4)
@@ -52,3 +53,18 @@ class ItemsFile():
         with jsonlines.open(self.output_directory / self._export_filename()) as reader:
             for i in reader:
                 yield i
+
+    def get_sample_items(self, filter=None):
+        sampler = Sampler()
+
+        with jsonlines.open(self.output_directory / self._export_filename()) as reader:
+            n = 0
+
+            for item in reader:
+                if filter and not filter(item):
+                    continue
+
+                if sampler.is_sampling_pick(n):
+                    yield item
+                    
+                n += 1

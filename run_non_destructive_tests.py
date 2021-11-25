@@ -16,8 +16,9 @@ def login(helper):
     helper.click_element(CssSelector('button#login_btn'))
     sleep(2)
 
-logging.basicConfig(level=logging.INFO)
-logging.basicConfig(filename='errors.log', level=logging.ERROR)
+LOGGING_FORMAT = '%(asctime)s %(levelname)s %(message)s'
+logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT)
+logging.basicConfig(filename='errors.log', level=logging.ERROR, format=LOGGING_FORMAT)
 
 started = datetime.now()
 
