@@ -3,6 +3,7 @@ from helper import ItemFileGroup
 from helper.selenium import CssSelector
 from non_destructive_tests import ProjectFileGroup
 
+
 def get_project_field_comments_tester(helper):
     return ProjectFieldCommentsTester(helper)
 
