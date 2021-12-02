@@ -1,4 +1,4 @@
-import logging
+import shutil
 import math
 import os
 import jsonlines
@@ -31,28 +31,62 @@ class Sampler:
             return is_perfect_square(5*n*n + 4) or is_perfect_square(5*n*n - 4)
 
 
-class ItemsFile():
-    def __init__(self, output_directory, object_name):
+class ItemFileGroup():
+    def __init__(self, helper, output_directory, filename_template, sorted=True):
+        self.helper = helper
         self.output_directory = output_directory
-        self.object_name = object_name
+        self.filename_template = filename_template
+        self.sorted = sorted
+
+    def get_file(self, template_arguments=None):
+        self.output_directory.mkdir(parents=True, exist_ok=True)
+
+        if template_arguments:
+            filename = self.filename_template.format(**template_arguments)
+        else:
+            filename = self.filename_template
+
+        return ItemsFile(self.output_directory, filename, sorted=self.sorted)
+
+    def clean(self):
+        if os.path.exists(self.output_directory):
+            shutil.rmtree(self.output_directory)
+
+
+class ItemsFile():
+    def __init__(self, output_directory, filename, sorted=True):
+        self.output_directory = output_directory
+        self.filename = filename
         self.items = []
+        self.sorted = sorted
 
     def _export_filename(self):
-        return secure_filename(f'{self.object_name}_items.jsonl')
+        return secure_filename(f'{self.filename}.jsonl')
 
     def add_item(self, item):
         if item not in self.items:
             self.items.append(item)
 
+    def exists(self):
+        return (self.output_directory / self._export_filename()).exists()
+
     def save(self):
         with jsonlines.open(self.output_directory / self._export_filename(), mode='w') as writer:
-            for i in sorted(self.items, key=lambda i: list(i.values())):
-                writer.write(i)
+            if self.sorted:
+                for i in sorted(self.items, key=lambda i: list(i.values())):
+                    writer.write(i)
+            else:
+                for i in self.items:
+                    writer.write(i)
 
-    def get_items(self):
+    def get_items(self, filter=None):
         with jsonlines.open(self.output_directory / self._export_filename()) as reader:
-            for i in reader:
-                yield i
+            for item in reader:
+                if filter and not filter(item):
+                    continue
+
+                yield item
+
 
     def get_sample_items(self, filter=None):
         sampler = Sampler()

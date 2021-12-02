@@ -3,6 +3,12 @@ import logging
 from time import sleep
 from helper.selenium import CssSelector, get_selenium
 from non_destructive_tests.project_tester import get_project_tester
+from non_destructive_tests.project_dags import get_project_dags_tester
+from non_destructive_tests.project_data_comparison import get_project_data_comparison_tester
+from non_destructive_tests.project_exports import get_project_report_export_tester
+from non_destructive_tests.project_field_comments import get_project_field_comments_tester
+from non_destructive_tests.project_logging import get_project_logging_tester
+from non_destructive_tests.project_users import get_project_user_tester
 from dotenv import load_dotenv
 from datetime import datetime
 
@@ -25,7 +31,13 @@ started = datetime.now()
 h = get_selenium()
 
 testers = [
-    get_project_tester(h),
+    # get_project_tester(h),
+    # get_project_dags_tester(h),
+    # get_project_data_comparison_tester(h),
+    # get_project_report_export_tester(h),
+    # get_project_field_comments_tester(h),
+    # get_project_logging_tester(h),
+    get_project_user_tester(h),
 ]
 
 try:

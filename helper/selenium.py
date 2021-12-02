@@ -68,8 +68,8 @@ class SelectAction(Action):
         self.item_selector = item_selector
 
     def _do(self):
-        self.helper.click_element_selector(selector=self.selector)
-        self.helper.click_element_selector(selector=self.item_selector)
+        self.helper.click_element(selector=self.selector)
+        self.helper.click_element(selector=self.item_selector)
 
 
 class TypeInTextboxAction(Action):
@@ -89,7 +89,7 @@ class ClickAction(Action):
         super().__init__(helper, selector)
 
     def _do(self):
-        self.helper.click_element_selector(selector=self.selector)
+        self.helper.click_element(selector=self.selector)
 
 
 class EnsureAction(Action):
@@ -155,7 +155,6 @@ class SeleniumHelper:
 
         self.output_directory = Path(output_directory) / self.version
         self.output_directory.mkdir(parents=True, exist_ok=True)
-        self._clear_directory(self.output_directory)
 
     def get_version(self):
         self.get('upgrade.php', versioned=False)
@@ -191,6 +190,9 @@ class SeleniumHelper:
     def wait_to_disappear(self, selector, element=None, seconds_to_wait=10):
         return WebDriverWait((element or self.driver), seconds_to_wait).until_not(lambda x: x.find_element(selector.by, selector.query))
     
+    def get_parent(self, element):
+        return self.get_element(XpathSelector("./.."), element=element)
+    
     def get_element(self, selector, allow_null=False, element=None):
         try:
             return (element or self.driver).find_element(selector.by, selector.query)
@@ -203,14 +205,16 @@ class SeleniumHelper:
         return (element or self.driver).find_elements(selector.by, selector.query)
     
     def type_in_textbox(self, selector, text, element=None):
-        element = self.get_element(selector, element=element)
-        element.clear()
-        element.send_keys(text)
+        e = self.get_element(selector, element=element)
+        e.clear()
+        e.send_keys(text)
+        return e
 
     def click_element(self, selector, element=None):
-        element = self.get_element(selector, element=element)
-        element.click()
+        e = self.get_element(selector, element=element)
+        e.click()
         sleep(self.click_wait_time)
+        return e
     
     def click_all(self, selector, element=None):
         while True:
