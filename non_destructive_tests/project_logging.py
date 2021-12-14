@@ -33,12 +33,7 @@ class ProjectLogging():
         self.helper = helper
         self.logging_file_group = LoggingFileGroup(self.helper)
 
-    def export_logging(self, project):
-        logging_file =  self.logging_file_group.get_file({
-            'pid': project['pid'],
-            'project_name': project['name'],
-        })
-
+    def export_logging(self, project, logging_file):
         logging.info(f'Export logging for project {project["name"]}')
         self.helper.get(self.URL_LOGGING.format(project['pid']))
 
@@ -51,14 +46,18 @@ class ProjectLogging():
                 action=self.helper.get_text(cells[2]),
                 changes=self.helper.get_text(cells[3]),
             ))
-    
-        logging_file.save()
 
     def run(self):
         p = ProjectFileGroup(self.helper)
         project_file =  p.get_file()
 
-        self.logging_file_group.clean()
-
         for project in project_file.get_items():
-            self.export_logging(project)
+            logging_file =  self.logging_file_group.get_file({
+                'pid': project['pid'],
+                'project_name': project['name'],
+            })
+
+            if not logging_file.exists():
+                self.export_logging(project, logging_file)
+        
+                logging_file.save()

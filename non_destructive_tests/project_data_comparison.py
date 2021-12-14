@@ -33,12 +33,7 @@ class ProjectDataComparison():
         self.helper = helper
         self.data_comparison_file_group = ComparisonFileGroup(self.helper)
 
-    def export_sample_data_comparison(self, project):
-        comparison_file =  self.data_comparison_file_group.get_file({
-            'pid': project['pid'],
-            'project_name': project['name'],
-        })
-
+    def export_sample_data_comparison(self, project, comparison_file):
         logging.info(f'Comparing data for project {project["name"]}')
         self.helper.get(self.URL_COMPARISON_TOOL.format(project['pid']))
 
@@ -64,14 +59,18 @@ class ProjectDataComparison():
                 record_1=self.helper.get_text(cells[2]),
                 record_2=self.helper.get_text(cells[3]),
             ))
-    
-        comparison_file.save()
 
     def run(self):
         p = ProjectFileGroup(self.helper)
-        project_file =  p.get_file()
-
-        self.data_comparison_file_group.clean()
+        project_file = p.get_file()
 
         for project in project_file.get_items(filter=lambda i: int(i['records']) > 1):
-            self.export_sample_data_comparison(project)
+            comparison_file =  self.data_comparison_file_group.get_file({
+                'pid': project['pid'],
+                'project_name': project['name'],
+            })
+
+            if not comparison_file.exists():
+                self.export_sample_data_comparison(project, comparison_file)
+        
+                comparison_file.save()

@@ -33,12 +33,7 @@ class ProjectAllDataReport():
         self.helper = helper
         self.report_file_group = ReportsFileGroup(self.helper)
 
-    def export_project_reports(self, project):
-        report_file =  self.report_file_group.get_file({
-            'pid': project['pid'],
-            'project_name': project['name'],
-        })
-
+    def export_project_reports(self, project, report_file):
         logging.info(f'Extracting records from project {project["name"]}')
         self.helper.get(self.URL_LIST_REPORTS.format(project['pid']))
 
@@ -51,13 +46,18 @@ class ProjectAllDataReport():
                 report_title=report_title,
             ))
     
-        report_file.save()
 
     def run(self):
         p = ProjectFileGroup(self.helper)
         project_file =  p.get_file()
 
-        self.report_file_group.clean()
-
         for project in project_file.get_items():
-            self.export_project_reports(project)
+            report_file =  self.report_file_group.get_file({
+                'pid': project['pid'],
+                'project_name': project['name'],
+            })
+
+            if not report_file.exists():
+                self.export_project_reports(project, report_file)
+        
+                report_file.save()

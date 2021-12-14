@@ -175,14 +175,25 @@ class SeleniumHelper:
         for f in directory.iterdir():
             f.unlink()
     
+    def get_versioned_base_url(self):
+        return urljoin(self.base_url, f'redcap_v{self.version}/')
+
     def get(self, url, versioned=True):
         if versioned:
-            base = urljoin(self.base_url, f'redcap_v{self.version}/')
+            base = self.get_versioned_base_url()
         else:
             base = self.base_url
 
         self.driver.get(urljoin(base, url))
         self.get_element(CssSelector('body'), allow_null=False)
+
+    def convert_to_relative_url(self, url):
+        if url.startswith(self.get_versioned_base_url()):
+            return url[len(self.get_versioned_base_url()):]
+        elif url.startswith(self.base_url):
+            return url[len(self.base_url):]
+        else:
+            return url
 
     def wait_to_appear(self, selector, element=None, seconds_to_wait=10):
         return WebDriverWait((element or self.driver), seconds_to_wait).until(lambda x: x.find_element(selector.by, selector.query))

@@ -33,12 +33,7 @@ class ProjectUsers():
         self.helper = helper
         self.users_file_group = UserFileGroup(self.helper)
 
-    def export_users(self, project):
-        users_file =  self.users_file_group.get_file({
-            'pid': project['pid'],
-            'project_name': project['name'],
-        })
-
+    def export_users(self, project, users_file):
         logging.info(f'Export users for project {project["name"]}')
         self.helper.get(self.URL_PROJECT_USERS.format(project['pid']))
 
@@ -51,14 +46,18 @@ class ProjectUsers():
                     role=self.helper.get_text(cells[0]),
                     username=self.helper.get_text(u),
                 ))
-    
-        users_file.save()
 
     def run(self):
         p = ProjectFileGroup(self.helper)
         project_file =  p.get_file()
 
-        self.users_file_group.clean()
-
         for project in project_file.get_items():
-            self.export_users(project)
+            users_file =  self.users_file_group.get_file({
+                'pid': project['pid'],
+                'project_name': project['name'],
+            })
+
+            if not users_file.exists():
+                self.export_users(project, users_file)
+        
+                users_file.save()
