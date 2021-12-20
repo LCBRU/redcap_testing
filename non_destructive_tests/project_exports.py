@@ -37,12 +37,20 @@ class ProjectAllDataReport():
         logging.info(f'Extracting records from project {project["name"]}')
         self.helper.get(self.URL_LIST_REPORTS.format(project['pid']))
 
-        for r in self.helper.get_elements(CssSelector('table#table-report_list tbody tr td:nth-of-type(3)')):
-            report_title = self.helper.get_text(r)
+        for row in self.helper.get_elements(CssSelector('table#table-report_list tbody tr')):
+            tds  = self.helper.get_elements(CssSelector('td'), element=row)
+
+            report_code = self.helper.get_text(tds[1])
+
+            if not report_code.isnumeric():
+                continue
+
+            report_title = self.helper.get_text(tds[2])
             logging.info(f'Found report {report_title} for project {project["name"]}')
 
             report_file.add_item(dict(
                 pid=project['pid'],
+                report_code=report_code,
                 report_title=report_title,
             ))
     

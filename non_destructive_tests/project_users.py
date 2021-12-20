@@ -27,7 +27,7 @@ class ProjectUserTester():
 
 
 class ProjectUsers():
-    URL_PROJECT_USERS = 'UserRights/index.php?pid=14'
+    URL_PROJECT_USERS = 'UserRights/index.php?pid={}'
     
     def __init__(self, helper):
         self.helper = helper

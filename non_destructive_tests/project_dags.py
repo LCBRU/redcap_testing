@@ -5,7 +5,10 @@ from non_destructive_tests import ProjectFileGroup
 
 
 def get_project_dags_tester(helper):
-    return ProjectDagTester(helper)
+    if helper.version == '7.2.2':
+        return ProjectDagTester(helper, 'DataAccessGroups/index.php?pid={}')
+    else:
+        return ProjectDagTester(helper, 'index.php?route=DataAccessGroupsController:index&pid={}')
 
 
 class DagFileGroup(ItemFileGroup):
@@ -14,12 +17,13 @@ class DagFileGroup(ItemFileGroup):
 
 
 class ProjectDagTester():
-    def __init__(self, helper):
+    def __init__(self, helper, url):
         self.helper = helper
+        self.url = url
 
     def run(self):
         steps = [
-            ProjectDags(self.helper),
+            ProjectDags(self.helper, self.url),
         ]
 
         for s in steps:
@@ -27,15 +31,14 @@ class ProjectDagTester():
 
 
 class ProjectDags():
-    URL_PROJECT_DAGS = 'DataAccessGroups/index.php?pid=14'
-    
-    def __init__(self, helper):
+    def __init__(self, helper, url):
         self.helper = helper
         self.dag_file_group = DagFileGroup(self.helper)
+        self.url = url
 
     def export_dags(self, project, dag_file):
         logging.info(f'Export dags for project {project["name"]}')
-        self.helper.get(self.URL_PROJECT_DAGS.format(project['pid']))
+        self.helper.get(self.url.format(project['pid']))
 
         for r in self.helper.get_elements(CssSelector('table#table-dags_table tbody tr')):
             cells = self.helper.get_elements(CssSelector('td'), element=r)

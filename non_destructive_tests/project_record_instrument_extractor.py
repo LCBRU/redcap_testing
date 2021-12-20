@@ -51,7 +51,7 @@ class ProjectRecordInstrumentExtractor():
                             record=record['record'],
                             instrument_name=instrument_name,
                             visit_name=visits[i],
-                            href=href,
+                            href=self.helper.convert_to_relative_url(href),
                         ))
 
     def run(self):

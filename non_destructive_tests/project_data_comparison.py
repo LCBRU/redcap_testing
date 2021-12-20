@@ -27,7 +27,7 @@ class ProjectDataComparisonTester():
 
 
 class ProjectDataComparison():
-    URL_COMPARISON_TOOL = 'index.php?pid=14&route=DataComparisonController:index'
+    URL_COMPARISON_TOOL = 'index.php?pid={}&route=DataComparisonController:index'
     
     def __init__(self, helper):
         self.helper = helper

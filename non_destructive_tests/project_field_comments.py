@@ -27,7 +27,7 @@ class ProjectFieldCommentsTester():
 
 
 class ProjectFieldComments():
-    URL_FIELD_COMMENTS = 'DataQuality/field_comment_log.php?pid=14'
+    URL_FIELD_COMMENTS = 'DataQuality/field_comment_log.php?pid={}'
     
     def __init__(self, helper):
         self.helper = helper

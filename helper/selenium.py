@@ -17,6 +17,9 @@ from email.mime.text import MIMEText
 from selenium.webdriver.support.ui import WebDriverWait
 
 
+RE_REMOVE_HTML_TAGS = re.compile('<.*?>')
+
+
 # Selectors
 
 class Selector:
@@ -156,6 +159,7 @@ class SeleniumHelper:
         self.output_directory = Path(output_directory) / self.version
         self.output_directory.mkdir(parents=True, exist_ok=True)
 
+
     def get_version(self):
         self.get('upgrade.php', versioned=False)
 
@@ -238,10 +242,10 @@ class SeleniumHelper:
             sleep(self.click_wait_time)
     
     def get_text(self, element):
-        result = (element.text or '').strip()
+        result = self.normalise_text(element.text)
 
         if len(result) == 0:
-            result = (element.get_attribute("text") or '').strip()
+            result = self.normalise_text(element.get_attribute("text"))
 
             if len(result) == 0:
                 result = self.get_innerHtml(element)
@@ -252,10 +256,14 @@ class SeleniumHelper:
         return (element.get_attribute("href") or '').strip()
     
     def get_value(self, element):
-        return (element.get_attribute("value") or '').strip()
+        return self.normalise_text(element.get_attribute("value"))
     
+    def normalise_text(self, value):
+        with_removed_tags = re.sub(RE_REMOVE_HTML_TAGS, '', (value or ''))
+        return ' '.join(with_removed_tags.split()).strip()
+
     def get_innerHtml(self, element):
-        return (self.driver.execute_script("return arguments[0].innerHTML", element) or '').strip()
+        return self.normalise_text(self.driver.execute_script("return arguments[0].innerHTML", element))
     
     def email_screenshot(self):
         msg = MIMEMultipart()

@@ -10,7 +10,7 @@ def get_project_extractor(helper):
 
 
 class ProjectExporter():
-    URL_VIEW_ALL_PROJECTS = 'ControlCenter/view_projects.php?view_all=1'
+    URL_VIEW_ALL_PROJECTS = 'ControlCenter/view_projects.php?view_all=1&show_archived'
 
     def __init__(self, helper):
         self.helper = helper

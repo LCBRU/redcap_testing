@@ -27,8 +27,8 @@ class ProjectLoggingTester():
 
 
 class ProjectLogging():
-    URL_LOGGING = 'Logging/index.php?pid=14'
-    
+    URL_LOGGING = 'Logging/index.php?pid={}&beginTime=&endTime='
+
     def __init__(self, helper):
         self.helper = helper
         self.logging_file_group = LoggingFileGroup(self.helper)
