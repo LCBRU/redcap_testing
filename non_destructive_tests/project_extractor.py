@@ -26,7 +26,7 @@ class ProjectExporter():
             a = self.helper.get_element(CssSelector('div.projtitle > a'), element=tr)
             records = self.helper.get_text(
                 self.helper.get_element(CssSelector("span[class^='pid-cntr-']"), element=tr)
-            )
+            ).replace('.', '').replace(',', '').strip()
 
             href = self.helper.get_href(a)
             name = self.helper.get_text(a).split(' PID ')[0].split(' OFFLINE')[0]
