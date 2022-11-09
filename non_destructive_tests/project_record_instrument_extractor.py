@@ -23,7 +23,7 @@ class ProjectRecordInstrumentExtractor():
         self.helper = helper
 
     def export_record_instruments(self, record, instrument_file):
-        logging.info(f'Extracting instruments for record {record["record"]} from project {record["pid"]}')
+        logging.info(f'Extracting instruments for record {record["record"]}')
         self.helper.get(self.URL_RECORD_HOME.format(pid=record['pid'], record=record['record']))
 
         visits = [self.helper.get_text(h) for h in self.helper.get_elements(CssSelector('table#event_grid_table thead th'))]
@@ -44,7 +44,7 @@ class ProjectRecordInstrumentExtractor():
                     href = self.helper.get_href(links[0])
 
                     if valid_url(href):
-                        logging.info(f'Saving instrument {instrument_name} for project {record["pid"]} and record {record["record"]}')
+                        logging.debug(f'Saving instrument {instrument_name} for project {record["pid"]} and record {record["record"]}')
 
                         instrument_file.add_item(dict(
                             pid=record["pid"],
@@ -59,7 +59,9 @@ class ProjectRecordInstrumentExtractor():
         rfg = RecordFileGroup(self.helper)
         ifg = InstrumentFileGroup(self.helper)
 
-        for project in project_file.get_sample_items(filter=lambda i: int(i['records']) > 0):
+        for project in project_file.get_items():
+            logging.info(f'Extract record instrument for {project["name"]}')
+
             record_file =  rfg.get_file({
                 'pid': project['pid'],
                 'project_name': project['name'],

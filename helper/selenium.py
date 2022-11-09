@@ -113,6 +113,7 @@ def get_selenium():
         download_wait_time=float(os.environ["DOWNLOAD_WAIT_TIME"]),
         page_wait_time=float(os.environ["PAGE_WAIT_TIME"]),
         email_address=os.environ["EMAIL_ADDRESS"],
+        compare_version=os.environ["COMPARE_VERSION"],
     )
 
     if os.environ.get("SELENIUM_HOST", None):
@@ -139,6 +140,7 @@ class SeleniumHelper:
         download_wait_time=5,
         page_wait_time=1,
         email_address=None,
+        compare_version='0.0.0',
     ):
         self.click_wait_time = click_wait_time
         self.download_wait_time = download_wait_time
@@ -151,6 +153,7 @@ class SeleniumHelper:
         self.email_address = email_address
 
         self.version = self.get_version()
+        self.compare_version = compare_version
 
         self.download_directory = Path(download_directory)
         self.download_directory.mkdir(parents=True, exist_ok=True)

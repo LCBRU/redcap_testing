@@ -56,6 +56,11 @@ Values extracted from the tested REDCap are stored in the output directory in a 
 
 The data is stored in JSON line files to facilitate comparison with `diff` or other text comparison tool.
 
+```bash
+# Show only filenames
+diff -fr outputs/*
+```
+
 The output of amended to more closely match previous versions using the 'COMPARE_VERSION' configuration setting.
 
 ## Testing a new Version

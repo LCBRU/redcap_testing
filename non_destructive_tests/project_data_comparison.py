@@ -64,7 +64,7 @@ class ProjectDataComparison():
         p = ProjectFileGroup(self.helper)
         project_file = p.get_file()
 
-        for project in project_file.get_items(filter=lambda i: int(i['records']) > 1):
+        for project in project_file.get_items():
             comparison_file =  self.data_comparison_file_group.get_file({
                 'pid': project['pid'],
                 'project_name': project['name'],

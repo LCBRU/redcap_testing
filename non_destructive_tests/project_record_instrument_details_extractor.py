@@ -12,7 +12,7 @@ class ProjectRecordInstrumentDetailsExtractor():
         self.helper = helper
 
     def export_instrument_details(self, instrument, instrument_details_file):
-        logging.info(f'Extracting details for instrument {instrument["instrument_name"]} for visit {instrument["visit_name"]} from project {instrument["pid"]} for participant {instrument["record"]}')
+        logging.info(f'Extracting details for instrument: \'{instrument["instrument_name"]}\' for visit: \'{instrument["visit_name"]}\'')
         self.helper.get(instrument['href'])
         fs = FieldSelector(self.helper)
 
@@ -31,12 +31,14 @@ class ProjectRecordInstrumentDetailsExtractor():
         ifg = InstrumentFileGroup(self.helper)
         idfg = InstrumentDetailsFileGroup(self.helper)
 
-        for project in project_file.get_sample_items(filter=lambda i: int(i['records']) > 0):
+        for project in project_file.get_items():
+            logging.info(f'Extracting instrument details for project {project["name"]}')
             record_file =  rfg.get_file({
                 'pid': project['pid'],
                 'project_name': project['name'],
             })
             for record in record_file.get_sample_items():
+                logging.info(f'Extracting instrument details for record {record["record"]}')
 
                 instrument_file =  ifg.get_file({
                     'pid': record['pid'],
@@ -123,7 +125,7 @@ class Field:
         return type(self).__name__
 
     def save_to_items_file(self, items_file, instrument):
-        logging.info(f'Saving {self.field_type}: {self.field_name} = {self.value}')
+        logging.debug(f'Saving {self.field_type}: {self.field_name} = {self.value}')
         items_file.add_item(dict(
             instrument_name=instrument['instrument_name'],
             visit_name=instrument['visit_name'],
@@ -224,7 +226,7 @@ class MatrixHeader(Field):
         return self.row.get_attribute('mtxgrp') and len(self.inputs) == 0
 
     def save_to_items_file(self, items_file, instrument):
-        logging.info(f'Saving {self.field_type}: Skipping')
+        logging.debug(f'Saving {self.field_type}: Skipping')
 
 
 class MatrixCheckboxRow(Field):

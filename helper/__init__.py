@@ -1,3 +1,4 @@
+import logging
 import shutil
 import math
 import os
@@ -18,9 +19,11 @@ class Sampler:
         is_perfect_square = lambda x: int(math.sqrt(x))**2 == x
 
         if self.sampling_type.isnumeric():
-            if (n % 100) < int(self.sampling_type.isnumeric()):
+            if (n % 100) < int(self.sampling_type):
+                logging.debug(f'Sampled')
                 return True
             else:
+                logging.debug(f'unSampled')
                 return False
 
         if self.sampling_type == Sampler.TYPE_ALL:

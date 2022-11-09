@@ -23,7 +23,7 @@ class ProjectRecordExtractor():
             record = o.get_attribute("value")
 
             if record:
-                logging.info(f'Saving record {record} for project {project["name"]}')
+                logging.debug(f'Saving record {record} for project {project["name"]}')
 
                 record_file.add_item(dict(
                     pid=project['pid'],
@@ -36,7 +36,7 @@ class ProjectRecordExtractor():
 
         self.record_file_group = RecordFileGroup(self.helper)
 
-        for project in project_file.get_sample_items(filter=lambda i: int(i['records']) > 0):
+        for project in project_file.get_items():
             record_file =  self.record_file_group.get_file({
                 'pid': project['pid'],
                 'project_name': project['name'],

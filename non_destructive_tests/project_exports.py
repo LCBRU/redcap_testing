@@ -46,7 +46,7 @@ class ProjectAllDataReport():
                 continue
 
             report_title = self.helper.get_text(tds[2])
-            logging.info(f'Found report {report_title} for project {project["name"]}')
+            logging.debug(f'Found report {report_title} for project {project["name"]}')
 
             report_file.add_item(dict(
                 pid=project['pid'],

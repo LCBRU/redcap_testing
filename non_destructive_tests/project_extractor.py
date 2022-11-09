@@ -3,7 +3,15 @@ from helper.selenium import CssSelector, XpathSelector
 from urllib.parse import urlparse
 from urllib.parse import parse_qs
 from non_destructive_tests import ProjectFileGroup
+from packaging import version
 
+
+CV_IGNORE_PROJECTS = {
+    version.parse('0.0.0'): [],
+    version.parse('7.2.2'): [
+        'Project Dashboards, Smart Functions, Smart Tables, & Smart Charts',
+    ],
+}
 
 def get_project_extractor(helper):
     return ProjectExporter(helper)
@@ -18,6 +26,9 @@ class ProjectExporter():
     def export_projects(self, project_file):
         logging.info('Extracting projects')
 
+        ignored_project_version = max([k for k in CV_IGNORE_PROJECTS.keys() if k < version.parse(self.helper.compare_version)])
+        ignored_projects = CV_IGNORE_PROJECTS[ignored_project_version]
+
         self.helper.get(self.URL_VIEW_ALL_PROJECTS)
 
         self.helper.wait_to_disappear(XpathSelector('//span[text()="Loading..."]'))
@@ -31,14 +42,15 @@ class ProjectExporter():
             href = self.helper.get_href(a)
             name = self.helper.get_text(a).split(' PID ')[0].split(' OFFLINE')[0]
 
-            logging.info(f'Saving project {name}')
+            if name not in ignored_projects:
+                logging.debug(f'Saving project {name}')
 
-            project_file.add_item(dict(
-                pid=parse_qs(urlparse(href).query).get('pid', [None])[0],
-                name=name,
-                href=self.helper.convert_to_relative_url(href),
-                records=records,
-            ))
+                project_file.add_item(dict(
+                    pid=parse_qs(urlparse(href).query).get('pid', [None])[0],
+                    name=name,
+                    href=self.helper.convert_to_relative_url(href),
+                    records=records,
+                ))
 
         project_file.save()
 

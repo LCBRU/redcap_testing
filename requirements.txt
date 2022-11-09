@@ -2,3 +2,6 @@ selenium
 python-dotenv
 jsonlines
 Werkzeug
+packaging
+click
+lark
