@@ -7,11 +7,11 @@ branch_parser = Lark(r"""
 
     var : "[" TOKEN ("(" INT ")")*"]"
 
-    ambiguous_part : part | bracketed_part
+    ambiguous_part : part | bracketed_part | pair
 
     bracketed_part : "(" part ")"
 
-    part : pair (JUNCTION ambiguous_part)*
+    part : ambiguous_part (JUNCTION ambiguous_part)*
     pair : var COMPARATOR VALUE
 
     %import common.WS
@@ -48,6 +48,7 @@ def main(filename):
                 sh = row['Section Header']
                 fl = row['Field Label']
 
-                print(f'{fn} > {sh} > {fl}: {bl}')
+                print(f'{fn} > {sh} > {fl}')
+                print(e)
 
 main()
