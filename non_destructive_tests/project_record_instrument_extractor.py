@@ -26,7 +26,7 @@ class ProjectRecordInstrumentExtractor():
         logging.info(f'Extracting instruments for record {record["record"]}')
         self.helper.get(self.URL_RECORD_HOME.format(pid=record['pid'], record=record['record']))
 
-        visits = [self.helper.get_text(h) for h in self.helper.get_elements(CssSelector('table#event_grid_table thead th'))]
+        visits = [self.helper.get_text(h) for h in self.helper.get_elements(CssSelector('table#event_grid_table thead th div.evTitle'))]
 
         for row in self.helper.get_elements(CssSelector('table#event_grid_table tbody tr')):
             tds  = self.helper.get_elements(CssSelector('td'), element=row)
@@ -36,7 +36,7 @@ class ProjectRecordInstrumentExtractor():
             if instrument_name == 'Delete all data on event:':
                 continue
 
-            for i, td in enumerate(tds[1:], start=1):
+            for i, td in enumerate(tds[1:]):
                 links = self.helper.get_elements(CssSelector('a'), element=td)
 
                 if len(links) > 0:

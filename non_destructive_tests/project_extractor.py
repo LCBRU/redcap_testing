@@ -3,12 +3,11 @@ from helper.selenium import CssSelector, XpathSelector
 from urllib.parse import urlparse
 from urllib.parse import parse_qs
 from non_destructive_tests import ProjectFileGroup
-from packaging import version
 
 
 CV_IGNORE_PROJECTS = {
-    version.parse('0.0.0'): [],
-    version.parse('7.2.2'): [
+    '0.0.0': [],
+    '7.2.2': [
         'Project Dashboards, Smart Functions, Smart Tables, & Smart Charts',
     ],
 }
@@ -26,8 +25,7 @@ class ProjectExporter():
     def export_projects(self, project_file):
         logging.info('Extracting projects')
 
-        ignored_project_version = max([k for k in CV_IGNORE_PROJECTS.keys() if k < version.parse(self.helper.compare_version)])
-        ignored_projects = CV_IGNORE_PROJECTS[ignored_project_version]
+        ignored_projects = self.helper.get_compare_version_item(CV_IGNORE_PROJECTS)
 
         self.helper.get(self.URL_VIEW_ALL_PROJECTS)
 

@@ -15,6 +15,8 @@ from email.mime.base import MIMEBase
 from email.encoders import encode_base64
 from email.mime.text import MIMEText
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import UnexpectedAlertPresentException
+from packaging import version
 
 
 RE_REMOVE_HTML_TAGS = re.compile('<.*?>')
@@ -185,6 +187,11 @@ class SeleniumHelper:
     def get_versioned_base_url(self):
         return urljoin(self.base_url, f'redcap_v{self.version}/')
 
+    def get_compare_version_item(self, versions):
+        cv = version.parse(self.compare_version)
+        latest_version = max([k for k in versions.keys() if version.parse(k) < cv])
+        return versions[latest_version]
+        
     def get(self, url, versioned=True):
         if versioned:
             base = self.get_versioned_base_url()
@@ -192,7 +199,14 @@ class SeleniumHelper:
             base = self.base_url
 
         self.driver.get(urljoin(base, url))
-        self.get_element(CssSelector('body'), allow_null=False)
+
+        for i in range(20):
+            try:
+                self.get_element(CssSelector('body'), allow_null=False)
+            except UnexpectedAlertPresentException as e:
+                # self.driver.switch_to.alert.accept();
+                sleep(1)
+
 
     def convert_to_relative_url(self, url):
         if url.startswith(self.get_versioned_base_url()):

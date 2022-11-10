@@ -4,6 +4,14 @@ from helper.selenium import CssSelector
 from non_destructive_tests import ProjectFileGroup
 
 
+
+CV_ACTION_TRANSLATION = {
+    '0.0.0': {},
+    '7.2.2': {
+        'Updated Record': 'Update record',
+    },
+}
+
 def get_project_logging_tester(helper):
     return ProjectLoggingTester(helper)
 
@@ -37,13 +45,20 @@ class ProjectLogging():
         logging.info(f'Export logging for project {project["name"]}')
         self.helper.get(self.URL_LOGGING.format(project['pid']))
 
+        action_translations = self.helper.get_compare_version_item(CV_ACTION_TRANSLATION)
+
         for r in self.helper.get_elements(CssSelector('table.form_border tbody tr:nth-of-type(2) ~ tr')):
             cells = self.helper.get_elements(CssSelector('td'), element=r)
+
+            a = self.helper.get_text(cells[2])
+
+            for ts, td in action_translations.items():
+                a = a.replace(ts, td)
 
             logging_file.add_item(dict(
                 time=self.helper.get_text(cells[0]),
                 username=self.helper.get_text(cells[1]),
-                action=self.helper.get_text(cells[2]),
+                action=a,
                 changes=self.helper.get_text(cells[3]),
             ))
 
