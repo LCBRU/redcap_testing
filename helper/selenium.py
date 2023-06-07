@@ -105,32 +105,6 @@ class EnsureAction(Action):
         self.helper.get_element_selector(selector=self.selector)
 
 
-def get_selenium():
-    args = dict(
-        download_directory=os.environ["DOWNLOAD_DIRECTORY"],
-        output_directory=os.environ["OUTPUT_DIRECTORY"],
-        base_url=os.environ["BASE_URL"],
-        implicit_wait_time=float(os.environ["IMPLICIT_WAIT_TIME"]),
-        click_wait_time=float(os.environ["CLICK_WAIT_TIME"]),
-        download_wait_time=float(os.environ["DOWNLOAD_WAIT_TIME"]),
-        page_wait_time=float(os.environ["PAGE_WAIT_TIME"]),
-        email_address=os.environ["EMAIL_ADDRESS"],
-        compare_version=os.environ["COMPARE_VERSION"],
-    )
-
-    if os.environ.get("SELENIUM_HOST", None):
-        return SeleniumGridHelper(
-            selenium_host=os.environ["SELENIUM_HOST"],
-            selenium_port=os.environ.get("SELENIUM_PORT", '4444'),
-            **args,
-        )
-    else:
-        return SeleniumLocalHelper(
-            headless=os.environ.get("SELENIUM_HEADLESS", False),
-            **args,
-        )
-
-
 class SeleniumHelper:
     def __init__(
         self,
@@ -138,23 +112,26 @@ class SeleniumHelper:
         download_directory,
         output_directory,
         base_url,
+        quitter=False,
         click_wait_time=0.2,
         download_wait_time=5,
         page_wait_time=1,
         email_address=None,
+        version='0.0.0',
         compare_version='0.0.0',
     ):
         self.click_wait_time = click_wait_time
         self.download_wait_time = download_wait_time
         self.page_wait_time = page_wait_time
+        self.version = version
 
         self.driver = driver
 
         self.base_url = base_url
+        self.quitter = quitter
 
         self.email_address = email_address
 
-        self.version = self.get_version()
         self.compare_version = compare_version
 
         self.download_directory = Path(download_directory)
@@ -163,17 +140,6 @@ class SeleniumHelper:
 
         self.output_directory = Path(output_directory) / self.version
         self.output_directory.mkdir(parents=True, exist_ok=True)
-
-
-    def get_version(self):
-        self.get('upgrade.php', versioned=False)
-
-        version_message = self.get_text(self.get_element(CssSelector('p')))
-        version_match = re.search('version (.+?)\. There', version_message)
-        if version_match:
-            version = version_match.group(1)
-        
-        return version
 
     def unzip_download_directory_contents(self):
         for zp in self._download_directory.iterdir():
@@ -184,19 +150,13 @@ class SeleniumHelper:
         for f in directory.iterdir():
             f.unlink()
     
-    def get_versioned_base_url(self):
-        return urljoin(self.base_url, f'redcap_v{self.version}/')
-
     def get_compare_version_item(self, versions):
         cv = version.parse(self.compare_version)
         latest_version = max([k for k in versions.keys() if version.parse(k) < cv])
         return versions[latest_version]
         
-    def get(self, url, versioned=True):
-        if versioned:
-            base = self.get_versioned_base_url()
-        else:
-            base = self.base_url
+    def get(self, url):
+        base = self.base_url
 
         self.driver.get(urljoin(base, url))
 
@@ -207,11 +167,8 @@ class SeleniumHelper:
                 # self.driver.switch_to.alert.accept();
                 sleep(1)
 
-
     def convert_to_relative_url(self, url):
-        if url.startswith(self.get_versioned_base_url()):
-            return url[len(self.get_versioned_base_url()):]
-        elif url.startswith(self.base_url):
+        if url.startswith(self.base_url):
             return url[len(self.base_url):]
         else:
             return url
@@ -281,7 +238,10 @@ class SeleniumHelper:
 
     def get_innerHtml(self, element):
         return self.normalise_text(self.driver.execute_script("return arguments[0].innerHTML", element))
-    
+
+    def save_screenshot(self, path):    
+        self.driver.save_screenshot(path)
+
     def email_screenshot(self):
         msg = MIMEMultipart()
         msg['Subject'] = 'Your Requested Screenshot from Selenium'
@@ -307,50 +267,77 @@ class SeleniumHelper:
         s.send_message(msg)
         s.quit()
 
-
-class SeleniumGridHelper(SeleniumHelper):
-    def __init__(self, download_directory, selenium_host, selenium_port, implicit_wait_time, browser=DesiredCapabilities.CHROME, **kwargs):
-
-        browser['acceptInsecureCerts'] = True
-        browser['acceptSslCerts'] = True
-
-
-        driver = webdriver.Remote(
-            command_executor=f'http://{selenium_host}:{selenium_port}/wd/hub',
-            desired_capabilities=browser
-        )
-
-        super().__init__(
-            driver=driver,
-            download_directory=download_directory,
-            **kwargs,
-        )
-
     def close(self):
-        self.driver.quit()
+        if self.quitter:
+            self.driver.quit()
+        else:
+            self.driver.close()
 
 
-class SeleniumLocalHelper(SeleniumHelper):
-    def __init__(self, download_directory, implicit_wait_time, headless=True, **kwargs):
+def get_selenium(helper_class=SeleniumHelper):
+    args = dict(
+        download_directory=os.environ["DOWNLOAD_DIRECTORY"],
+        output_directory=os.environ["OUTPUT_DIRECTORY"],
+        base_url=os.environ["BASE_URL"],
+        implicit_wait_time=float(os.environ["IMPLICIT_WAIT_TIME"]),
+        click_wait_time=float(os.environ["CLICK_WAIT_TIME"]),
+        download_wait_time=float(os.environ["DOWNLOAD_WAIT_TIME"]),
+        page_wait_time=float(os.environ["PAGE_WAIT_TIME"]),
+        email_address=os.environ["EMAIL_ADDRESS"],
+        compare_version=os.environ["COMPARE_VERSION"],
+        version=os.environ["VERSION"],
+    )
 
-        profile = webdriver.FirefoxProfile()
-        profile.set_preference("browser.download.folderList", 2)
-        profile.set_preference("browser.download.manager.showWhenStarting", False)
-        profile.set_preference("browser.download.dir", download_directory)
-        profile.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/zip")
-
-        options = FirefoxOptions()
-        if headless:
-            options.add_argument("--headless")
-
-        driver = webdriver.Firefox(options=options, firefox_profile=profile)
-        driver.implicitly_wait(implicit_wait_time)
-
-        super().__init__(
-            driver=driver,
-            download_directory=download_directory,
-            **kwargs,
+    if os.environ.get("SELENIUM_HOST", None):
+        return get_selenium_grid_helper(
+            helper_class=helper_class,
+            selenium_host=os.environ["SELENIUM_HOST"],
+            selenium_port=os.environ.get("SELENIUM_PORT", '4444'),
+            **args,
+        )
+    else:
+        return get_selenium_local_helper(
+            helper_class=helper_class,
+            headless=os.environ.get("SELENIUM_HEADLESS", False),
+            **args,
         )
 
-    def close(self):
-        self.driver.close()
+
+def get_selenium_grid_helper(helper_class, download_directory, selenium_host, selenium_port, implicit_wait_time, browser=DesiredCapabilities.CHROME, **kwargs):
+    browser['acceptInsecureCerts'] = True
+    browser['acceptSslCerts'] = True
+
+    driver = webdriver.Remote(
+        command_executor=f'http://{selenium_host}:{selenium_port}/wd/hub',
+        desired_capabilities=browser
+    )
+
+    return helper_class(
+        driver=driver,
+        download_directory=download_directory,
+        quitter=True,
+        **kwargs,
+    )
+
+
+def get_selenium_local_helper(helper_class, download_directory, implicit_wait_time, headless=True, **kwargs):
+    profile = webdriver.FirefoxProfile()
+    profile.set_preference("browser.download.folderList", 2)
+    profile.set_preference("browser.download.manager.showWhenStarting", False)
+    profile.set_preference("browser.download.dir", download_directory)
+    profile.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/zip")
+
+    options = FirefoxOptions()
+    if headless:
+        options.add_argument("--headless")
+
+    driver = webdriver.Firefox(options=options, firefox_profile=profile)
+    driver.implicitly_wait(implicit_wait_time)
+
+    return helper_class(
+        driver=driver,
+        download_directory=download_directory,
+        **kwargs,
+    )
+
+

@@ -1,7 +1,7 @@
 import os
 import logging
 from time import sleep
-from helper.selenium import CssSelector, get_selenium
+from helper.selenium import CssSelector, get_selenium, SeleniumHelper
 from non_destructive_tests.project_extractor import get_project_extractor
 from non_destructive_tests.project_record_extractor import get_project_record_extractor
 from non_destructive_tests.project_record_instrument_extractor import get_project_record_instrument_extractor
@@ -14,12 +14,13 @@ from non_destructive_tests.project_logging import get_project_logging_tester
 from non_destructive_tests.project_users import get_project_user_tester
 from dotenv import load_dotenv
 from datetime import datetime
+from urllib.parse import urljoin
 
 
 load_dotenv()
 
 def login(helper):
-    helper.get('')
+    helper.get('', versioned=False)
     helper.type_in_textbox(CssSelector('input#username'), os.environ["USERNAME"])
     helper.type_in_textbox(CssSelector('input#password'), os.environ["PASSWORD"])
     helper.click_element(CssSelector('button#login_btn'))
@@ -31,7 +32,14 @@ logging.basicConfig(filename='errors.log', level=logging.ERROR, format=LOGGING_F
 
 started = datetime.now()
 
-h = get_selenium()
+class RedcapHelper(SeleniumHelper):
+    def get(self, url, versioned=True):
+        if versioned:
+            super().get(urljoin(f'redcap_v{self.version}/', url))
+        else:
+            super().get(url)
+
+h = get_selenium(helper_class=RedcapHelper)
 
 testers = [
     get_project_extractor(h),
