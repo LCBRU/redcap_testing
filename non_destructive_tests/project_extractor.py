@@ -1,5 +1,5 @@
 import logging
-from helper.selenium import CssSelector, XpathSelector
+from lbrc_selenium.selenium import CssSelector, XpathSelector
 from urllib.parse import urlparse
 from urllib.parse import parse_qs
 from non_destructive_tests import ProjectFileGroup

@@ -1,6 +1,6 @@
 import logging
-from helper import ItemFileGroup
-from helper.selenium import CssSelector
+from lbrc_selenium import ItemFileGroup
+from lbrc_selenium.selenium import CssSelector
 from non_destructive_tests import ProjectFileGroup
 
 

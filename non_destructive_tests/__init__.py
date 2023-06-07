@@ -1,5 +1,5 @@
 
-from helper import ItemFileGroup
+from lbrc_selenium import ItemFileGroup
 
 
 class ProjectFileGroup(ItemFileGroup):

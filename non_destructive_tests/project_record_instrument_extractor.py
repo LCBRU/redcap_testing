@@ -1,5 +1,5 @@
 import logging
-from helper.selenium import CssSelector
+from lbrc_selenium.selenium import CssSelector
 from non_destructive_tests import ProjectFileGroup, RecordFileGroup, InstrumentFileGroup
 from urllib.parse import urlparse
 

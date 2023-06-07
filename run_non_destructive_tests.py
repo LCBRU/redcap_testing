@@ -1,7 +1,7 @@
 import os
 import logging
 from time import sleep
-from helper.selenium import CssSelector, get_selenium, SeleniumHelper
+from lbrc_selenium.selenium import CssSelector, get_selenium, SeleniumHelper
 from non_destructive_tests.project_extractor import get_project_extractor
 from non_destructive_tests.project_record_extractor import get_project_record_extractor
 from non_destructive_tests.project_record_instrument_extractor import get_project_record_instrument_extractor
