@@ -41,6 +41,12 @@ This application is configured by copying the file `example.env` to `.env` and s
 
 ## Running
 
+Run the REDCap server by `cd`ing into the REDCap directory and run the PHP dev web server
+
+```bash
+php -S localhost:8000
+```
+
 Run the tool using the command:
 ```bash
 python run_non_destructive_tests.py

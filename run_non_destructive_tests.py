@@ -19,6 +19,7 @@ from urllib.parse import urljoin
 
 load_dotenv()
 
+
 def login(helper):
     helper.get('', versioned=False)
     helper.type_in_textbox(CssSelector('input#username'), os.environ["USERNAME"])
