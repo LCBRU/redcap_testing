@@ -1,8 +1,0 @@
-selenium
-python-dotenv
-jsonlines
-Werkzeug
-packaging
-click
-lark
--e git+https://github.com/LCBRU/lbrc_selenium.git@main#egg=lbrc_selenium

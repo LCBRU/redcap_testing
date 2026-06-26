@@ -1,0 +1,13 @@
+[project]
+name = "redcap-testing"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "lbrc-selenium",
+    "python-dotenv>=1.2.2",
+]
+
+[tool.uv.sources]
+lbrc-selenium = { git = "https://github.com/LCBRU/lbrc_selenium.git", rev = "main" }
