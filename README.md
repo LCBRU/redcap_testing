@@ -9,17 +9,8 @@ This program performs various non-destructive tests against a REDCap system to e
 
 ## Installation
 
+1. Ensure that [Astral uv](https://docs.astral.sh/uv/) is installed
 1. Checkout the code from the repository.
-1. `cd` into the project directory
-1. Create and activate a virtual environment by running the code:
-    ```bash
-    python -m venv venv
-    source venv/bin/activate
-    ```
-1. Install dependencies using the command:
-    ```bash
-    pip install -r requirements.txt
-    ```
 
 ### Requirements
 
@@ -29,7 +20,7 @@ This application tests a separately install version of REDCap.  Therefore, you w
 
 Although the tests this tool runs should be non-destructive, that is not guaranteed.  Therefore, do not run these tool against a live instance of REDCap.
 
-Also, it can be helpful to take a backup of each version of REDCap prior to running the tool.  As you will see below, the tool often requires small tweaks to be able to run against different version and produce a comparable out, so it it is often necessary re-run many times.
+Also, it can be helpful to take a backup of each version of REDCap prior to running the tool.  As you will see below, the tool often requires small tweaks to be able to run against different version and produce a comparable out, so it is often necessary to re-run many times.
 
 #### Selenium
 
@@ -49,7 +40,7 @@ php -S localhost:8000
 
 Run the tool using the command:
 ```bash
-python run_non_destructive_tests.py
+uv run redcap_testing/main.py
 ```
 
 This takes a while to run and sometime fails because of Selenium problems.  However, the tool can be restarted and it will pick up from where it left off.
